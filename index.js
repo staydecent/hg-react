@@ -10,11 +10,7 @@ var xtend = require('xtend');
 module.exports = {
   render: renderComponent,
   createClass: createClass,
-  DOM: {
-    div: function(props, inner) {
-      return h('div', inner);
-    }
-  }
+  DOM: h
 };
 
 // Components
