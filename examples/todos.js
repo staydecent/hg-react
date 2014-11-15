@@ -121,11 +121,6 @@
 	  DOM: h
 	};
 
-	// Cache, and DOM reference
-
-	var refs = new (Stapes.subclass())();
-
-
 	// Components
 	var Component = Stapes.subclass({
 	  constructor: function(desc) {
@@ -170,7 +165,6 @@
 	function createFactory(Component) {
 	  return function(props) {
 	    var component = new Component(props);
-	    refs.push(component);
 
 	    return h('div', {
 	      'key': component.displayName
