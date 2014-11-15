@@ -2,7 +2,6 @@ var Delegator = require('dom-delegator');
 var Loop = require('main-loop');
 var h = require('virtual-hyperscript');
 
-var struct = require('observ-struct');
 var Stapes = require('stapes');
 var xtend = require('xtend');
 
@@ -10,34 +9,38 @@ var xtend = require('xtend');
 module.exports = {
   render: renderComponent,
   createClass: createClass,
+  createFactory: createFactory,
   DOM: h
 };
 
 // Components
-var Component = (function() {
-  var State;
-
-  return Stapes.subclass({
-    constructor: function(desc) {
-      this.state = this.getInitialState();
-      State = struct(this.state);
-     
-      for (var prop in desc) {
-        if (typeof desc[prop] === 'function') {
-          this[prop] = desc[prop].bind(this);
-        } else {
-          this[prop] = desc[prop];
-        }
+var Component = Stapes.subclass({
+  constructor: function(desc) {
+    for (var prop in desc) {
+      if (typeof desc[prop] === 'function') {
+        this[prop] = desc[prop].bind(this);
+      } else {
+        this[prop] = desc[prop];
       }
-    },
-    getInitialState: function() {
-      return {};
-    },
-    _update: function(cb) {
-      State(cb);
     }
-  }, true);
-})();
+
+    this.state = this.getInitialState();
+    this._observ = new (Stapes.subclass())();
+    this._observ.set('state', this.state);
+  },
+  getInitialState: function() {
+    return {'NAH': 1};
+  },
+  setState: function(desc) {
+    var prevState = this._observ.get('state');
+    var newState = xtend(prevState, desc);
+    this.state = newState;
+    this._observ.set('state', newState);
+  },
+  addEventListener: function(cb) {
+    this._observ.on('change:state', cb);
+  }
+}, true);
 
 function createClass(desc) {
   return function(props) {
@@ -48,6 +51,16 @@ function createClass(desc) {
       }
     });
     return new ReactComponent();
+  };
+}
+
+function createFactory(Component) {
+  return function(props) {
+    var component = new Component(props);
+
+    return h('div', {
+      'key': component.displayName
+    }, component.render());
   };
 }
 
@@ -73,5 +86,13 @@ function renderComponent(component, elem) {
   var loop = Loop(component.getInitialState(), component.render);
   if (elem) { elem.appendChild(loop.target); }
 
-  component._update(loop.update); // call loop.update on state change
+  component.addEventListener(loop.update); // call loop.update on state change
 }
+
+
+// DOM Hooks
+
+function AttributeHook(value) { this.value = value; }
+AttributeHook.prototype.hook = function (elem, prop) {
+  elem.setAttribute(prop, this.value);
+};

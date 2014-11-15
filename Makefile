@@ -7,3 +7,6 @@ build:
 
 watch:
 	@$(BIN)/webpack --progress --colors --watch
+
+examples-build:
+	@$(BIN)/webpack --config examples.config.js --progress --colors

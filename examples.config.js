@@ -2,13 +2,12 @@ var path = require("path");
 
 module.exports = {
   entry: {
-    "hg-react": "./index.js"
+    "hello": "./examples/hello.jsx",
+    "todos": "./examples/todos.jsx"
   },
   output: {
-    path: path.join(__dirname, "dist"),
-    filename: "[name].js",
-    library: ["React"],
-    libraryTarget: "umd"
+    path: path.join(__dirname, "examples"),
+    filename: "[name].js"
   },
   module: {
     preLoaders: [
