@@ -14,22 +14,30 @@ module.exports = {
 };
 
 // Components
-var Component = Stapes.subclass({
-  constructor: function(desc) {
-    this.state = this.getInitialState();
-   
-    for (var prop in desc) {
-      if (typeof desc[prop] === 'function') {
-        this[prop] = desc[prop].bind(this);
-      } else {
-        this[prop] = desc[prop];
+var Component = (function() {
+  var State;
+
+  return Stapes.subclass({
+    constructor: function(desc) {
+      this.state = this.getInitialState();
+      State = struct(this.state);
+     
+      for (var prop in desc) {
+        if (typeof desc[prop] === 'function') {
+          this[prop] = desc[prop].bind(this);
+        } else {
+          this[prop] = desc[prop];
+        }
       }
+    },
+    getInitialState: function() {
+      return {};
+    },
+    _update: function(cb) {
+      State(cb);
     }
-  },
-  getInitialState: function() {
-    return {};
-  }
-}, true);
+  }, true);
+})();
 
 function createClass(desc) {
   return function(props) {
@@ -65,6 +73,5 @@ function renderComponent(component, elem) {
   var loop = Loop(component.getInitialState(), component.render);
   if (elem) { elem.appendChild(loop.target); }
 
-  var observ = struct(component.getInitialState());
-  return observ(loop.update);
+  component._update(loop.update); // call loop.update on state change
 }
