@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>hg-react hello world</title>
+  <script type="text/javascript" src="../dist/hg-react.min.js"></script>
+</head>
+<body>
+
+<script>
+var Hello = React.createClass({
+  render: function() {
+    return React.DOM.div({}, 'Hello ' + this.props.name);
+  }
+});
+React.render(Hello({name: 'World'}), document.body);
+</script>
+</body>
+</html>
