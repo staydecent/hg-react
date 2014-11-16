@@ -1,6 +1,6 @@
 {
   "name": "hg-react",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Mimic the React component API via Mercury modules.",
   "main": "index.js",
   "scripts": {
