@@ -1,3 +1,4 @@
+var struct = require('observ-struct');
 var Delegator = require('dom-delegator');
 var Loop = require('main-loop');
 var h = require('virtual-hyperscript');
@@ -33,15 +34,17 @@ var Component = Stapes.subclass({
     this.state = this.getInitialState();
     this._observ = new (Stapes.subclass())();
     this._observ.set('state', this.state);
+    this._struct = struct({state: struct(this.state)});
   },
   getInitialState: function() {
-    return {'NAH': 1};
+    return {};
   },
   setState: function(desc) {
     var prevState = this._observ.get('state');
     var newState = xtend(prevState, desc);
     this.state = newState;
     this._observ.set('state', newState);
+    this._struct.state.set(newState);
   },
   getDOMNode: function() {
     return this._elem || null;
@@ -51,7 +54,7 @@ var Component = Stapes.subclass({
   componentWillUpdate: function() {},
   componentDidUpdate: function() {},
   addEventListener: function(cb) {
-    this._observ.on('change:state', cb);
+    this._struct(cb);
   }
 }, true);
 
@@ -161,7 +164,9 @@ function renderComponent(component, elem) {
 
   Delegator(); // Setup proxied dom events
 
-  var loop = Loop(component.getInitialState(), createFactory(component));
+  var render = createFactory(component);
+  var loop = Loop(component.state, render);
+
   if (elem) { elem.appendChild(loop.target); }
 
   component.addEventListener(loop.update); // call loop.update on state change

@@ -54,12 +54,13 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Delegator = __webpack_require__(1);
-	var Loop = __webpack_require__(2);
-	var h = __webpack_require__(3);
+	var struct = __webpack_require__(1);
+	var Delegator = __webpack_require__(2);
+	var Loop = __webpack_require__(3);
+	var h = __webpack_require__(4);
 
-	var Stapes = __webpack_require__(4);
-	var xtend = __webpack_require__(5);
+	var Stapes = __webpack_require__(5);
+	var xtend = __webpack_require__(6);
 
 
 	module.exports = {
@@ -89,15 +90,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.state = this.getInitialState();
 	    this._observ = new (Stapes.subclass())();
 	    this._observ.set('state', this.state);
+	    this._struct = struct({state: struct(this.state)});
 	  },
 	  getInitialState: function() {
-	    return {'NAH': 1};
+	    return {};
 	  },
 	  setState: function(desc) {
 	    var prevState = this._observ.get('state');
 	    var newState = xtend(prevState, desc);
 	    this.state = newState;
 	    this._observ.set('state', newState);
+	    this._struct.state.set(newState);
 	  },
 	  getDOMNode: function() {
 	    return this._elem || null;
@@ -107,7 +110,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  componentWillUpdate: function() {},
 	  componentDidUpdate: function() {},
 	  addEventListener: function(cb) {
-	    this._observ.on('change:state', cb);
+	    this._struct(cb);
 	  }
 	}, true);
 
@@ -217,7 +220,9 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  Delegator(); // Setup proxied dom events
 
-	  var loop = Loop(component.getInitialState(), createFactory(component));
+	  var render = createFactory(component);
+	  var loop = Loop(component.state, render);
+
 	  if (elem) { elem.appendChild(loop.target); }
 
 	  component.addEventListener(loop.update); // call loop.update on state change
@@ -235,11 +240,125 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Individual = __webpack_require__(11)
-	var cuid = __webpack_require__(29)
-	var globalDocument = __webpack_require__(16)
+	var Observ = __webpack_require__(12)
+	var extend = __webpack_require__(13)
 
-	var DOMDelegator = __webpack_require__(6)
+	var blackList = {
+	    "length": "Clashes with `Function.prototype.length`.\n",
+	    "name": "Clashes with `Function.prototype.name`.\n",
+	    "_diff": "_diff is reserved key of observ-struct.\n",
+	    "_type": "_type is reserved key of observ-struct.\n",
+	    "_version": "_version is reserved key of observ-struct.\n"
+	}
+	var NO_TRANSACTION = {}
+
+	function setNonEnumerable(object, key, value) {
+	    Object.defineProperty(object, key, {
+	        value: value,
+	        writable: true,
+	        configurable: true,
+	        enumerable: false
+	    })
+	}
+
+	/* ObservStruct := (Object<String, Observ<T>>) =>
+	    Object<String, Observ<T>> &
+	        Observ<Object<String, T> & {
+	            _diff: Object<String, Any>
+	        }>
+
+	*/
+	module.exports = ObservStruct
+
+	function ObservStruct(struct) {
+	    var keys = Object.keys(struct)
+
+	    var initialState = {}
+	    var currentTransaction = NO_TRANSACTION
+	    var nestedTransaction = NO_TRANSACTION
+
+	    keys.forEach(function (key) {
+	        if (blackList.hasOwnProperty(key)) {
+	            throw new Error("cannot create an observ-struct " +
+	                "with a key named '" + key + "'.\n" +
+	                blackList[key]);
+	        }
+
+	        var observ = struct[key]
+	        initialState[key] = typeof observ === "function" ?
+	            observ() : observ
+	    })
+
+	    var obs = Observ(initialState)
+	    keys.forEach(function (key) {
+	        var observ = struct[key]
+	        obs[key] = observ
+
+	        if (typeof observ === "function") {
+	            observ(function (value) {
+	                if (nestedTransaction === value) {
+	                    return
+	                }
+
+	                var state = extend(obs())
+	                state[key] = value
+	                var diff = {}
+	                diff[key] = value && value._diff ?
+	                    value._diff : value
+
+	                setNonEnumerable(state, "_diff", diff)
+	                currentTransaction = state
+	                obs.set(state)
+	                currentTransaction = NO_TRANSACTION
+	            })
+	        }
+	    })
+	    var _set = obs.set
+	    obs.set = function trackDiff(value) {
+	        if (currentTransaction === value) {
+	            return _set(value)
+	        }
+
+	        var newState = extend(value)
+	        setNonEnumerable(newState, "_diff", value)
+	        _set(newState)
+	    }
+
+	    obs(function (newState) {
+	        if (currentTransaction === newState) {
+	            return
+	        }
+
+	        keys.forEach(function (key) {
+	            var observ = struct[key]
+	            var newObservValue = newState[key]
+
+	            if (typeof observ === "function" &&
+	                observ() !== newObservValue
+	            ) {
+	                nestedTransaction = newObservValue
+	                observ.set(newState[key])
+	                nestedTransaction = NO_TRANSACTION
+	            }
+	        })
+	    })
+
+	    obs._type = "observ-struct"
+	    obs._version = "5"
+
+	    return obs
+	}
+
+
+/***/ },
+/* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var Individual = __webpack_require__(14)
+	var cuid = __webpack_require__(32)
+	var globalDocument = __webpack_require__(19)
+
+	var DOMDelegator = __webpack_require__(7)
 
 	var versionKey = "11"
 	var cacheKey = "__DOM_DELEGATOR_CACHE@" + versionKey
@@ -298,14 +417,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 2 */
+/* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var raf = __webpack_require__(15)
-	var vtreeDiff = __webpack_require__(17)
-	var vdomCreate = __webpack_require__(18)
-	var vdomPatch = __webpack_require__(19)
-	var TypedError = __webpack_require__(20)
+	var raf = __webpack_require__(18)
+	var vtreeDiff = __webpack_require__(20)
+	var vdomCreate = __webpack_require__(21)
+	var vdomPatch = __webpack_require__(22)
+	var TypedError = __webpack_require__(23)
 
 	var InvalidUpdateInRender = TypedError({
 	    type: "main-loop.invalid.update.in-render",
@@ -382,22 +501,22 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 3 */
+/* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var VNode = __webpack_require__(21)
-	var VText = __webpack_require__(22)
-	var isVNode = __webpack_require__(23)
-	var isVText = __webpack_require__(24)
-	var isWidget = __webpack_require__(25)
-	var isHook = __webpack_require__(26)
-	var isVThunk = __webpack_require__(27)
-	var TypedError = __webpack_require__(28)
+	var VNode = __webpack_require__(24)
+	var VText = __webpack_require__(25)
+	var isVNode = __webpack_require__(26)
+	var isVText = __webpack_require__(27)
+	var isWidget = __webpack_require__(28)
+	var isHook = __webpack_require__(29)
+	var isVThunk = __webpack_require__(30)
+	var TypedError = __webpack_require__(31)
 
-	var parseTag = __webpack_require__(7)
-	var softSetHook = __webpack_require__(8)
-	var dataSetHook = __webpack_require__(9)
-	var evHook = __webpack_require__(10)
+	var parseTag = __webpack_require__(8)
+	var softSetHook = __webpack_require__(9)
+	var dataSetHook = __webpack_require__(10)
+	var evHook = __webpack_require__(11)
 
 	var UnexpectedVirtualElement = TypedError({
 	    type: "virtual-hyperscript.unexpected.virtual-element",
@@ -514,7 +633,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 4 */
+/* 5 */
 /***/ function(module, exports, __webpack_require__) {
 
 	//
@@ -1138,7 +1257,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 5 */
+/* 6 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -1161,16 +1280,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 6 */
+/* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var globalDocument = __webpack_require__(16)
-	var DataSet = __webpack_require__(30)
-	var createStore = __webpack_require__(32)
+	var globalDocument = __webpack_require__(19)
+	var DataSet = __webpack_require__(33)
+	var createStore = __webpack_require__(35)
 
-	var addEvent = __webpack_require__(12)
-	var removeEvent = __webpack_require__(13)
-	var ProxyEvent = __webpack_require__(14)
+	var addEvent = __webpack_require__(15)
+	var removeEvent = __webpack_require__(16)
+	var ProxyEvent = __webpack_require__(17)
 
 	var HANDLER_STORE = createStore()
 
@@ -1340,7 +1459,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 7 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var classIdSplit = /([\.#]?[a-zA-Z0-9_:-]+)/
@@ -1395,7 +1514,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 8 */
+/* 9 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = SoftSetHook;
@@ -1416,10 +1535,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 9 */
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(41)
+	var DataSet = __webpack_require__(36)
 
 	module.exports = DataSetHook;
 
@@ -1440,10 +1559,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 10 */
+/* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(41)
+	var DataSet = __webpack_require__(36)
 
 	module.exports = DataSetHook;
 
@@ -1471,7 +1590,63 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 11 */
+/* 12 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = Observable
+
+	function Observable(value) {
+	    var listeners = []
+	    value = value === undefined ? null : value
+
+	    observable.set = function (v) {
+	        value = v
+	        listeners.forEach(function (f) {
+	            f(v)
+	        })
+	    }
+
+	    return observable
+
+	    function observable(listener) {
+	        if (!listener) {
+	            return value
+	        }
+
+	        listeners.push(listener)
+
+	        return function remove() {
+	            listeners.splice(listeners.indexOf(listener), 1)
+	        }
+	    }
+	}
+
+
+/***/ },
+/* 13 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = extend
+
+	function extend() {
+	    var target = {}
+
+	    for (var i = 0; i < arguments.length; i++) {
+	        var source = arguments[i]
+
+	        for (var key in source) {
+	            if (source.hasOwnProperty(key)) {
+	                target[key] = source[key]
+	            }
+	        }
+	    }
+
+	    return target
+	}
+
+
+/***/ },
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -1496,10 +1671,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 12 */
+/* 15 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(30)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = addEvent
 
@@ -1520,10 +1695,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 13 */
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(30)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = removeEvent
 
@@ -1545,10 +1720,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 14 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var inherits = __webpack_require__(47)
+	var inherits = __webpack_require__(51)
 
 	var ALL_PROPS = [
 	    "altKey", "bubbles", "cancelable", "ctrlKey",
@@ -1629,10 +1804,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 15 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var now = __webpack_require__(60)
+	var now = __webpack_require__(62)
 	  , global = typeof window === 'undefined' ? {} : window
 	  , vendors = ['moz', 'webkit']
 	  , suffix = 'AnimationFrame'
@@ -1715,12 +1890,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 16 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
 	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(31);
+	var minDoc = __webpack_require__(34);
 
 	if (typeof document !== 'undefined') {
 	    module.exports = document;
@@ -1737,19 +1912,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 17 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isArray = __webpack_require__(51)
-	var isObject = __webpack_require__(52)
+	var isArray = __webpack_require__(55)
+	var isObject = __webpack_require__(56)
 
-	var VPatch = __webpack_require__(33)
-	var isVNode = __webpack_require__(34)
-	var isVText = __webpack_require__(35)
-	var isWidget = __webpack_require__(36)
-	var isThunk = __webpack_require__(37)
-	var isHook = __webpack_require__(38)
-	var handleThunk = __webpack_require__(39)
+	var VPatch = __webpack_require__(42)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var isThunk = __webpack_require__(43)
+	var isHook = __webpack_require__(44)
+	var handleThunk = __webpack_require__(41)
 
 	module.exports = diff
 
@@ -2057,17 +2232,17 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 18 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(59)
+	var document = __webpack_require__(63)
 
-	var applyProperties = __webpack_require__(40)
+	var applyProperties = __webpack_require__(37)
 
-	var isVNode = __webpack_require__(34)
-	var isVText = __webpack_require__(35)
-	var isWidget = __webpack_require__(36)
-	var handleThunk = __webpack_require__(39)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var handleThunk = __webpack_require__(41)
 
 	module.exports = createElement
 
@@ -2109,14 +2284,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 19 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(59)
+	var document = __webpack_require__(63)
 	var isArray = __webpack_require__(53)
 
-	var domIndex = __webpack_require__(42)
-	var patchOp = __webpack_require__(43)
+	var domIndex = __webpack_require__(45)
+	var patchOp = __webpack_require__(46)
 	module.exports = patch
 
 	function patch(rootNode, patches) {
@@ -2191,12 +2366,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 20 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var camelize = __webpack_require__(55)
-	var template = __webpack_require__(56)
-	var extend = __webpack_require__(61)
+	var camelize = __webpack_require__(58)
+	var template = __webpack_require__(59)
+	var extend = __webpack_require__(64)
 
 	module.exports = TypedError
 
@@ -2245,13 +2420,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 21 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(44)
-	var isVNode = __webpack_require__(23)
-	var isWidget = __webpack_require__(25)
-	var isVHook = __webpack_require__(26)
+	var version = __webpack_require__(47)
+	var isVNode = __webpack_require__(26)
+	var isWidget = __webpack_require__(28)
+	var isVHook = __webpack_require__(29)
 
 	module.exports = VirtualNode
 
@@ -2293,10 +2468,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 22 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(44)
+	var version = __webpack_require__(47)
 
 	module.exports = VirtualText
 
@@ -2309,10 +2484,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 23 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(44)
+	var version = __webpack_require__(47)
 
 	module.exports = isVirtualNode
 
@@ -2322,10 +2497,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 24 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(44)
+	var version = __webpack_require__(47)
 
 	module.exports = isVirtualText
 
@@ -2335,7 +2510,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 25 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isWidget
@@ -2346,7 +2521,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 26 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isHook
@@ -2358,7 +2533,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 27 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isThunk
@@ -2369,12 +2544,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 28 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var camelize = __webpack_require__(57)
-	var template = __webpack_require__(58)
-	var extend = __webpack_require__(45)
+	var camelize = __webpack_require__(60)
+	var template = __webpack_require__(61)
+	var extend = __webpack_require__(48)
 
 	module.exports = TypedError
 
@@ -2423,7 +2598,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 29 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -2539,13 +2714,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 30 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(32)
-	var Individual = __webpack_require__(11)
+	var createStore = __webpack_require__(35)
+	var Individual = __webpack_require__(14)
 
-	var createHash = __webpack_require__(46)
+	var createHash = __webpack_require__(49)
 
 	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
 
@@ -2563,16 +2738,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 31 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* (ignored) */
 
 /***/ },
-/* 32 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(48);
+	var hiddenStore = __webpack_require__(50);
 
 	module.exports = createStore;
 
@@ -2592,67 +2767,26 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 33 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var version = __webpack_require__(49)
-
-	VirtualPatch.NONE = 0
-	VirtualPatch.VTEXT = 1
-	VirtualPatch.VNODE = 2
-	VirtualPatch.WIDGET = 3
-	VirtualPatch.PROPS = 4
-	VirtualPatch.ORDER = 5
-	VirtualPatch.INSERT = 6
-	VirtualPatch.REMOVE = 7
-	VirtualPatch.THUNK = 8
-
-	module.exports = VirtualPatch
-
-	function VirtualPatch(type, vNode, patch) {
-	    this.type = Number(type)
-	    this.vNode = vNode
-	    this.patch = patch
-	}
-
-	VirtualPatch.prototype.version = version
-	VirtualPatch.prototype.type = "VirtualPatch"
-
-
-/***/ },
-/* 34 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var version = __webpack_require__(49)
-
-	module.exports = isVirtualNode
-
-	function isVirtualNode(x) {
-	    return x && x.type === "VirtualNode" && x.version === version
-	}
-
-
-/***/ },
-/* 35 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var version = __webpack_require__(49)
-
-	module.exports = isVirtualText
-
-	function isVirtualText(x) {
-	    return x && x.type === "VirtualText" && x.version === version
-	}
-
-
-/***/ },
 /* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = isWidget
+	var createStore = __webpack_require__(68)
+	var Individual = __webpack_require__(66)
 
-	function isWidget(w) {
-	    return w && w.type === "Widget"
+	var createHash = __webpack_require__(52)
+
+	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
+
+	module.exports = DataSet
+
+	function DataSet(elem) {
+	    var store = hashStore(elem)
+
+	    if (!store.hash) {
+	        store.hash = createHash(elem)
+	    }
+
+	    return store.hash
 	}
 
 
@@ -2660,77 +2794,8 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = isThunk
-
-	function isThunk(t) {
-	    return t && t.type === "Thunk"
-	}
-
-
-/***/ },
-/* 38 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = isHook
-
-	function isHook(hook) {
-	    return hook && typeof hook.hook === "function" &&
-	        !hook.hasOwnProperty("hook")
-	}
-
-
-/***/ },
-/* 39 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var isVNode = __webpack_require__(34)
-	var isVText = __webpack_require__(35)
-	var isWidget = __webpack_require__(36)
-	var isThunk = __webpack_require__(37)
-
-	module.exports = handleThunk
-
-	function handleThunk(a, b) {
-	    var renderedA = a
-	    var renderedB = b
-
-	    if (isThunk(b)) {
-	        renderedB = renderThunk(b, a)
-	    }
-
-	    if (isThunk(a)) {
-	        renderedA = renderThunk(a, null)
-	    }
-
-	    return {
-	        a: renderedA,
-	        b: renderedB
-	    }
-	}
-
-	function renderThunk(thunk, previous) {
-	    var renderedThunk = thunk.vnode
-
-	    if (!renderedThunk) {
-	        renderedThunk = thunk.vnode = thunk.render(previous)
-	    }
-
-	    if (!(isVNode(renderedThunk) ||
-	            isVText(renderedThunk) ||
-	            isWidget(renderedThunk))) {
-	        throw new Error("thunk did not return a valid node");
-	    }
-
-	    return renderedThunk
-	}
-
-
-/***/ },
-/* 40 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var isObject = __webpack_require__(62)
-	var isHook = __webpack_require__(38)
+	var isObject = __webpack_require__(65)
+	var isHook = __webpack_require__(44)
 
 	module.exports = applyProperties
 
@@ -2828,31 +2893,141 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
+/* 38 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var version = __webpack_require__(54)
+
+	module.exports = isVirtualNode
+
+	function isVirtualNode(x) {
+	    return x && x.type === "VirtualNode" && x.version === version
+	}
+
+
+/***/ },
+/* 39 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var version = __webpack_require__(54)
+
+	module.exports = isVirtualText
+
+	function isVirtualText(x) {
+	    return x && x.type === "VirtualText" && x.version === version
+	}
+
+
+/***/ },
+/* 40 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = isWidget
+
+	function isWidget(w) {
+	    return w && w.type === "Widget"
+	}
+
+
+/***/ },
 /* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(65)
-	var Individual = __webpack_require__(64)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var isThunk = __webpack_require__(43)
 
-	var createHash = __webpack_require__(50)
+	module.exports = handleThunk
 
-	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
+	function handleThunk(a, b) {
+	    var renderedA = a
+	    var renderedB = b
 
-	module.exports = DataSet
-
-	function DataSet(elem) {
-	    var store = hashStore(elem)
-
-	    if (!store.hash) {
-	        store.hash = createHash(elem)
+	    if (isThunk(b)) {
+	        renderedB = renderThunk(b, a)
 	    }
 
-	    return store.hash
+	    if (isThunk(a)) {
+	        renderedA = renderThunk(a, null)
+	    }
+
+	    return {
+	        a: renderedA,
+	        b: renderedB
+	    }
+	}
+
+	function renderThunk(thunk, previous) {
+	    var renderedThunk = thunk.vnode
+
+	    if (!renderedThunk) {
+	        renderedThunk = thunk.vnode = thunk.render(previous)
+	    }
+
+	    if (!(isVNode(renderedThunk) ||
+	            isVText(renderedThunk) ||
+	            isWidget(renderedThunk))) {
+	        throw new Error("thunk did not return a valid node");
+	    }
+
+	    return renderedThunk
 	}
 
 
 /***/ },
 /* 42 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var version = __webpack_require__(54)
+
+	VirtualPatch.NONE = 0
+	VirtualPatch.VTEXT = 1
+	VirtualPatch.VNODE = 2
+	VirtualPatch.WIDGET = 3
+	VirtualPatch.PROPS = 4
+	VirtualPatch.ORDER = 5
+	VirtualPatch.INSERT = 6
+	VirtualPatch.REMOVE = 7
+	VirtualPatch.THUNK = 8
+
+	module.exports = VirtualPatch
+
+	function VirtualPatch(type, vNode, patch) {
+	    this.type = Number(type)
+	    this.vNode = vNode
+	    this.patch = patch
+	}
+
+	VirtualPatch.prototype.version = version
+	VirtualPatch.prototype.type = "VirtualPatch"
+
+
+/***/ },
+/* 43 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = isThunk
+
+	function isThunk(t) {
+	    return t && t.type === "Thunk"
+	}
+
+
+/***/ },
+/* 44 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = isHook
+
+	function isHook(hook) {
+	    return hook && typeof hook.hook === "function" &&
+	        !hook.hasOwnProperty("hook")
+	}
+
+
+/***/ },
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Maps a virtual DOM tree onto a real DOM tree in an efficient manner.
@@ -2943,16 +3118,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 43 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var applyProperties = __webpack_require__(40)
+	var applyProperties = __webpack_require__(37)
 
-	var isWidget = __webpack_require__(36)
-	var VPatch = __webpack_require__(33)
+	var isWidget = __webpack_require__(40)
+	var VPatch = __webpack_require__(42)
 
-	var render = __webpack_require__(18)
-	var updateWidget = __webpack_require__(54)
+	var render = __webpack_require__(21)
+	var updateWidget = __webpack_require__(57)
 
 	module.exports = applyPatch
 
@@ -3117,14 +3292,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 44 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = "1"
 
 
 /***/ },
-/* 45 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3145,7 +3320,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 46 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3173,7 +3348,29 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 47 */
+/* 50 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = hiddenStore;
+
+	function hiddenStore(obj, key) {
+	    var store = { identity: key };
+	    var valueOf = obj.valueOf;
+
+	    Object.defineProperty(obj, "valueOf", {
+	        value: function (value) {
+	            return value !== key ?
+	                valueOf.apply(this, arguments) : store;
+	        },
+	        writable: true
+	    });
+
+	    return store;
+	}
+
+
+/***/ },
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	if (typeof Object.create === 'function') {
@@ -3202,36 +3399,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 48 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = hiddenStore;
-
-	function hiddenStore(obj, key) {
-	    var store = { identity: key };
-	    var valueOf = obj.valueOf;
-
-	    Object.defineProperty(obj, "valueOf", {
-	        value: function (value) {
-	            return value !== key ?
-	                valueOf.apply(this, arguments) : store;
-	        },
-	        writable: true
-	    });
-
-	    return store;
-	}
-
-
-/***/ },
-/* 49 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = "1"
-
-
-/***/ },
-/* 50 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3259,31 +3427,6 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 51 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var nativeIsArray = Array.isArray
-	var toString = Object.prototype.toString
-
-	module.exports = nativeIsArray || isArray
-
-	function isArray(obj) {
-	    return toString.call(obj) === "[object Array]"
-	}
-
-
-/***/ },
-/* 52 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = isObject
-
-	function isObject(x) {
-	    return typeof x === "object" && x !== null
-	}
-
-
-/***/ },
 /* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -3301,7 +3444,39 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isWidget = __webpack_require__(36)
+	module.exports = "1"
+
+
+/***/ },
+/* 55 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var nativeIsArray = Array.isArray
+	var toString = Object.prototype.toString
+
+	module.exports = nativeIsArray || isArray
+
+	function isArray(obj) {
+	    return toString.call(obj) === "[object Array]"
+	}
+
+
+/***/ },
+/* 56 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = isObject
+
+	function isObject(x) {
+	    return typeof x === "object" && x !== null
+	}
+
+
+/***/ },
+/* 57 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var isWidget = __webpack_require__(40)
 
 	module.exports = updateWidget
 
@@ -3319,212 +3494,67 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 55 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = function(obj) {
-	    if (typeof obj === 'string') return camelCase(obj);
-	    return walk(obj);
-	};
-
-	function walk (obj) {
-	    if (!obj || typeof obj !== 'object') return obj;
-	    if (isDate(obj) || isRegex(obj)) return obj;
-	    if (isArray(obj)) return map(obj, walk);
-	    return reduce(objectKeys(obj), function (acc, key) {
-	        var camel = camelCase(key);
-	        acc[camel] = walk(obj[key]);
-	        return acc;
-	    }, {});
-	}
-
-	function camelCase(str) {
-	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
-	        return x.toUpperCase();
-	    });
-	}
-
-	var isArray = Array.isArray || function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Array]';
-	};
-
-	var isDate = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Date]';
-	};
-
-	var isRegex = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object RegExp]';
-	};
-
-	var has = Object.prototype.hasOwnProperty;
-	var objectKeys = Object.keys || function (obj) {
-	    var keys = [];
-	    for (var key in obj) {
-	        if (has.call(obj, key)) keys.push(key);
-	    }
-	    return keys;
-	};
-
-	function map (xs, f) {
-	    if (xs.map) return xs.map(f);
-	    var res = [];
-	    for (var i = 0; i < xs.length; i++) {
-	        res.push(f(xs[i], i));
-	    }
-	    return res;
-	}
-
-	function reduce (xs, f, acc) {
-	    if (xs.reduce) return xs.reduce(f, acc);
-	    for (var i = 0; i < xs.length; i++) {
-	        acc = f(acc, xs[i], i);
-	    }
-	    return acc;
-	}
-
-
-/***/ },
-/* 56 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var nargs = /\{([0-9a-zA-Z]+)\}/g
-	var slice = Array.prototype.slice
-
-	module.exports = template
-
-	function template(string) {
-	    var args
-
-	    if (arguments.length === 2 && typeof arguments[1] === "object") {
-	        args = arguments[1]
-	    } else {
-	        args = slice.call(arguments, 1)
-	    }
-
-	    if (!args || !args.hasOwnProperty) {
-	        args = {}
-	    }
-
-	    return string.replace(nargs, function replaceArg(match, i, index) {
-	        var result
-
-	        if (string[index - 1] === "{" &&
-	            string[index + match.length] === "}") {
-	            return i
-	        } else {
-	            result = args.hasOwnProperty(i) ? args[i] : null
-	            if (result === null || result === undefined) {
-	                return ""
-	            }
-
-	            return result
-	        }
-	    })
-	}
-
-
-/***/ },
-/* 57 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = function(obj) {
-	    if (typeof obj === 'string') return camelCase(obj);
-	    return walk(obj);
-	};
-
-	function walk (obj) {
-	    if (!obj || typeof obj !== 'object') return obj;
-	    if (isDate(obj) || isRegex(obj)) return obj;
-	    if (isArray(obj)) return map(obj, walk);
-	    return reduce(objectKeys(obj), function (acc, key) {
-	        var camel = camelCase(key);
-	        acc[camel] = walk(obj[key]);
-	        return acc;
-	    }, {});
-	}
-
-	function camelCase(str) {
-	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
-	        return x.toUpperCase();
-	    });
-	}
-
-	var isArray = Array.isArray || function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Array]';
-	};
-
-	var isDate = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Date]';
-	};
-
-	var isRegex = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object RegExp]';
-	};
-
-	var has = Object.prototype.hasOwnProperty;
-	var objectKeys = Object.keys || function (obj) {
-	    var keys = [];
-	    for (var key in obj) {
-	        if (has.call(obj, key)) keys.push(key);
-	    }
-	    return keys;
-	};
-
-	function map (xs, f) {
-	    if (xs.map) return xs.map(f);
-	    var res = [];
-	    for (var i = 0; i < xs.length; i++) {
-	        res.push(f(xs[i], i));
-	    }
-	    return res;
-	}
-
-	function reduce (xs, f, acc) {
-	    if (xs.reduce) return xs.reduce(f, acc);
-	    for (var i = 0; i < xs.length; i++) {
-	        acc = f(acc, xs[i], i);
-	    }
-	    return acc;
-	}
-
-
-/***/ },
 /* 58 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var nargs = /\{([0-9a-zA-Z]+)\}/g
-	var slice = Array.prototype.slice
+	module.exports = function(obj) {
+	    if (typeof obj === 'string') return camelCase(obj);
+	    return walk(obj);
+	};
 
-	module.exports = template
+	function walk (obj) {
+	    if (!obj || typeof obj !== 'object') return obj;
+	    if (isDate(obj) || isRegex(obj)) return obj;
+	    if (isArray(obj)) return map(obj, walk);
+	    return reduce(objectKeys(obj), function (acc, key) {
+	        var camel = camelCase(key);
+	        acc[camel] = walk(obj[key]);
+	        return acc;
+	    }, {});
+	}
 
-	function template(string) {
-	    var args
+	function camelCase(str) {
+	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
+	        return x.toUpperCase();
+	    });
+	}
 
-	    if (arguments.length === 2 && typeof arguments[1] === "object") {
-	        args = arguments[1]
-	    } else {
-	        args = slice.call(arguments, 1)
+	var isArray = Array.isArray || function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Array]';
+	};
+
+	var isDate = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Date]';
+	};
+
+	var isRegex = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object RegExp]';
+	};
+
+	var has = Object.prototype.hasOwnProperty;
+	var objectKeys = Object.keys || function (obj) {
+	    var keys = [];
+	    for (var key in obj) {
+	        if (has.call(obj, key)) keys.push(key);
 	    }
+	    return keys;
+	};
 
-	    if (!args || !args.hasOwnProperty) {
-	        args = {}
+	function map (xs, f) {
+	    if (xs.map) return xs.map(f);
+	    var res = [];
+	    for (var i = 0; i < xs.length; i++) {
+	        res.push(f(xs[i], i));
 	    }
+	    return res;
+	}
 
-	    return string.replace(nargs, function replaceArg(match, i, index) {
-	        var result
-
-	        if (string[index - 1] === "{" &&
-	            string[index + match.length] === "}") {
-	            return i
-	        } else {
-	            result = args.hasOwnProperty(i) ? args[i] : null
-	            if (result === null || result === undefined) {
-	                return ""
-	            }
-
-	            return result
-	        }
-	    })
+	function reduce (xs, f, acc) {
+	    if (xs.reduce) return xs.reduce(f, acc);
+	    for (var i = 0; i < xs.length; i++) {
+	        acc = f(acc, xs[i], i);
+	    }
+	    return acc;
 	}
 
 
@@ -3532,26 +3562,149 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
-	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(63);
+	var nargs = /\{([0-9a-zA-Z]+)\}/g
+	var slice = Array.prototype.slice
 
-	if (typeof document !== 'undefined') {
-	    module.exports = document;
-	} else {
-	    var doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'];
+	module.exports = template
 
-	    if (!doccy) {
-	        doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'] = minDoc;
+	function template(string) {
+	    var args
+
+	    if (arguments.length === 2 && typeof arguments[1] === "object") {
+	        args = arguments[1]
+	    } else {
+	        args = slice.call(arguments, 1)
 	    }
 
-	    module.exports = doccy;
+	    if (!args || !args.hasOwnProperty) {
+	        args = {}
+	    }
+
+	    return string.replace(nargs, function replaceArg(match, i, index) {
+	        var result
+
+	        if (string[index - 1] === "{" &&
+	            string[index + match.length] === "}") {
+	            return i
+	        } else {
+	            result = args.hasOwnProperty(i) ? args[i] : null
+	            if (result === null || result === undefined) {
+	                return ""
+	            }
+
+	            return result
+	        }
+	    })
 	}
-	
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
+
 
 /***/ },
 /* 60 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = function(obj) {
+	    if (typeof obj === 'string') return camelCase(obj);
+	    return walk(obj);
+	};
+
+	function walk (obj) {
+	    if (!obj || typeof obj !== 'object') return obj;
+	    if (isDate(obj) || isRegex(obj)) return obj;
+	    if (isArray(obj)) return map(obj, walk);
+	    return reduce(objectKeys(obj), function (acc, key) {
+	        var camel = camelCase(key);
+	        acc[camel] = walk(obj[key]);
+	        return acc;
+	    }, {});
+	}
+
+	function camelCase(str) {
+	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
+	        return x.toUpperCase();
+	    });
+	}
+
+	var isArray = Array.isArray || function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Array]';
+	};
+
+	var isDate = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Date]';
+	};
+
+	var isRegex = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object RegExp]';
+	};
+
+	var has = Object.prototype.hasOwnProperty;
+	var objectKeys = Object.keys || function (obj) {
+	    var keys = [];
+	    for (var key in obj) {
+	        if (has.call(obj, key)) keys.push(key);
+	    }
+	    return keys;
+	};
+
+	function map (xs, f) {
+	    if (xs.map) return xs.map(f);
+	    var res = [];
+	    for (var i = 0; i < xs.length; i++) {
+	        res.push(f(xs[i], i));
+	    }
+	    return res;
+	}
+
+	function reduce (xs, f, acc) {
+	    if (xs.reduce) return xs.reduce(f, acc);
+	    for (var i = 0; i < xs.length; i++) {
+	        acc = f(acc, xs[i], i);
+	    }
+	    return acc;
+	}
+
+
+/***/ },
+/* 61 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var nargs = /\{([0-9a-zA-Z]+)\}/g
+	var slice = Array.prototype.slice
+
+	module.exports = template
+
+	function template(string) {
+	    var args
+
+	    if (arguments.length === 2 && typeof arguments[1] === "object") {
+	        args = arguments[1]
+	    } else {
+	        args = slice.call(arguments, 1)
+	    }
+
+	    if (!args || !args.hasOwnProperty) {
+	        args = {}
+	    }
+
+	    return string.replace(nargs, function replaceArg(match, i, index) {
+	        var result
+
+	        if (string[index - 1] === "{" &&
+	            string[index + match.length] === "}") {
+	            return i
+	        } else {
+	            result = args.hasOwnProperty(i) ? args[i] : null
+	            if (result === null || result === undefined) {
+	                return ""
+	            }
+
+	            return result
+	        }
+	    })
+	}
+
+
+/***/ },
+/* 62 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(process) {// Generated by CoffeeScript 1.6.3
@@ -3591,10 +3744,32 @@ return /******/ (function(modules) { // webpackBootstrap
 	//@ sourceMappingURL=performance-now.map
 	*/
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(67)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(69)))
 
 /***/ },
-/* 61 */
+/* 63 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
+	    typeof window !== 'undefined' ? window : {}
+	var minDoc = __webpack_require__(67);
+
+	if (typeof document !== 'undefined') {
+	    module.exports = document;
+	} else {
+	    var doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'];
+
+	    if (!doccy) {
+	        doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'] = minDoc;
+	    }
+
+	    module.exports = doccy;
+	}
+	
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
+
+/***/ },
+/* 64 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3615,7 +3790,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 62 */
+/* 65 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isObject
@@ -3626,13 +3801,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 63 */
-/***/ function(module, exports, __webpack_require__) {
-
-	/* (ignored) */
-
-/***/ },
-/* 64 */
+/* 66 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -3657,10 +3826,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 65 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(66);
+	/* (ignored) */
+
+/***/ },
+/* 68 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var hiddenStore = __webpack_require__(70);
 
 	module.exports = createStore;
 
@@ -3680,29 +3855,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 66 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = hiddenStore;
-
-	function hiddenStore(obj, key) {
-	    var store = { identity: key };
-	    var valueOf = obj.valueOf;
-
-	    Object.defineProperty(obj, "valueOf", {
-	        value: function (value) {
-	            return value !== key ?
-	                valueOf.apply(this, arguments) : store;
-	        },
-	        writable: true
-	    });
-
-	    return store;
-	}
-
-
-/***/ },
-/* 67 */
+/* 69 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// shim for using process in browser
@@ -3768,6 +3921,28 @@ return /******/ (function(modules) { // webpackBootstrap
 	process.chdir = function (dir) {
 	    throw new Error('process.chdir is not supported');
 	};
+
+
+/***/ },
+/* 70 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = hiddenStore;
+
+	function hiddenStore(obj, key) {
+	    var store = { identity: key };
+	    var valueOf = obj.valueOf;
+
+	    Object.defineProperty(obj, "valueOf", {
+	        value: function (value) {
+	            return value !== key ?
+	                valueOf.apply(this, arguments) : store;
+	        },
+	        writable: true
+	    });
+
+	    return store;
+	}
 
 
 /***/ }
