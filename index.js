@@ -1,5 +1,3 @@
-require("setimmediate");
-
 var Delegator = require('dom-delegator');
 var Loop = require('main-loop');
 var h = require('virtual-hyperscript');
@@ -96,13 +94,13 @@ LifecycleHook.prototype.hook = function (elem, propName) {
     this.component.componentWillUpdate();
   }
 
-  setImmediate(function() {
+  setTimeout(function() {
     if (!this.component._mounted) {
       this.component.componentDidMount();
     } else {
       this.component.componentDidUpdate();
     }
-  }.bind(this));
+  }.bind(this), 1);
 };
 
 

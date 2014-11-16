@@ -54,14 +54,12 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	__webpack_require__(4);
-
 	var Delegator = __webpack_require__(1);
 	var Loop = __webpack_require__(2);
 	var h = __webpack_require__(3);
 
-	var Stapes = __webpack_require__(5);
-	var xtend = __webpack_require__(6);
+	var Stapes = __webpack_require__(4);
+	var xtend = __webpack_require__(5);
 
 
 	module.exports = {
@@ -152,13 +150,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	    this.component.componentWillUpdate();
 	  }
 
-	  setImmediate(function() {
+	  setTimeout(function() {
 	    if (!this.component._mounted) {
 	      this.component.componentDidMount();
 	    } else {
 	      this.component.componentDidUpdate();
 	    }
-	  }.bind(this));
+	  }.bind(this), 1);
 	};
 
 
@@ -189,11 +187,11 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Individual = __webpack_require__(13)
-	var cuid = __webpack_require__(31)
-	var globalDocument = __webpack_require__(18)
+	var Individual = __webpack_require__(11)
+	var cuid = __webpack_require__(29)
+	var globalDocument = __webpack_require__(16)
 
-	var DOMDelegator = __webpack_require__(7)
+	var DOMDelegator = __webpack_require__(6)
 
 	var versionKey = "11"
 	var cacheKey = "__DOM_DELEGATOR_CACHE@" + versionKey
@@ -255,11 +253,11 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var raf = __webpack_require__(17)
-	var vtreeDiff = __webpack_require__(19)
-	var vdomCreate = __webpack_require__(20)
-	var vdomPatch = __webpack_require__(21)
-	var TypedError = __webpack_require__(22)
+	var raf = __webpack_require__(12)
+	var vtreeDiff = __webpack_require__(17)
+	var vdomCreate = __webpack_require__(18)
+	var vdomPatch = __webpack_require__(19)
+	var TypedError = __webpack_require__(20)
 
 	var InvalidUpdateInRender = TypedError({
 	    type: "main-loop.invalid.update.in-render",
@@ -339,19 +337,19 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var VNode = __webpack_require__(23)
-	var VText = __webpack_require__(24)
-	var isVNode = __webpack_require__(25)
-	var isVText = __webpack_require__(26)
-	var isWidget = __webpack_require__(27)
-	var isHook = __webpack_require__(28)
-	var isVThunk = __webpack_require__(29)
-	var TypedError = __webpack_require__(30)
+	var VNode = __webpack_require__(22)
+	var VText = __webpack_require__(23)
+	var isVNode = __webpack_require__(24)
+	var isVText = __webpack_require__(25)
+	var isWidget = __webpack_require__(26)
+	var isHook = __webpack_require__(27)
+	var isVThunk = __webpack_require__(28)
+	var TypedError = __webpack_require__(21)
 
-	var parseTag = __webpack_require__(8)
-	var softSetHook = __webpack_require__(9)
-	var dataSetHook = __webpack_require__(10)
-	var evHook = __webpack_require__(11)
+	var parseTag = __webpack_require__(7)
+	var softSetHook = __webpack_require__(8)
+	var dataSetHook = __webpack_require__(9)
+	var evHook = __webpack_require__(10)
 
 	var UnexpectedVirtualElement = TypedError({
 	    type: "virtual-hyperscript.unexpected.virtual-element",
@@ -469,188 +467,6 @@ return /******/ (function(modules) { // webpackBootstrap
 
 /***/ },
 /* 4 */
-/***/ function(module, exports, __webpack_require__) {
-
-	/* WEBPACK VAR INJECTION */(function(process) {(function (global, undefined) {
-	    "use strict";
-
-	    if (global.setImmediate) {
-	        return;
-	    }
-
-	    var nextHandle = 1; // Spec says greater than zero
-	    var tasksByHandle = {};
-	    var currentlyRunningATask = false;
-	    var doc = global.document;
-	    var setImmediate;
-
-	    function addFromSetImmediateArguments(args) {
-	        tasksByHandle[nextHandle] = partiallyApplied.apply(undefined, args);
-	        return nextHandle++;
-	    }
-
-	    // This function accepts the same arguments as setImmediate, but
-	    // returns a function that requires no arguments.
-	    function partiallyApplied(handler) {
-	        var args = [].slice.call(arguments, 1);
-	        return function() {
-	            if (typeof handler === "function") {
-	                handler.apply(undefined, args);
-	            } else {
-	                (new Function("" + handler))();
-	            }
-	        };
-	    }
-
-	    function runIfPresent(handle) {
-	        // From the spec: "Wait until any invocations of this algorithm started before this one have completed."
-	        // So if we're currently running a task, we'll need to delay this invocation.
-	        if (currentlyRunningATask) {
-	            // Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
-	            // "too much recursion" error.
-	            setTimeout(partiallyApplied(runIfPresent, handle), 0);
-	        } else {
-	            var task = tasksByHandle[handle];
-	            if (task) {
-	                currentlyRunningATask = true;
-	                try {
-	                    task();
-	                } finally {
-	                    clearImmediate(handle);
-	                    currentlyRunningATask = false;
-	                }
-	            }
-	        }
-	    }
-
-	    function clearImmediate(handle) {
-	        delete tasksByHandle[handle];
-	    }
-
-	    function installNextTickImplementation() {
-	        setImmediate = function() {
-	            var handle = addFromSetImmediateArguments(arguments);
-	            process.nextTick(partiallyApplied(runIfPresent, handle));
-	            return handle;
-	        };
-	    }
-
-	    function canUsePostMessage() {
-	        // The test against `importScripts` prevents this implementation from being installed inside a web worker,
-	        // where `global.postMessage` means something completely different and can't be used for this purpose.
-	        if (global.postMessage && !global.importScripts) {
-	            var postMessageIsAsynchronous = true;
-	            var oldOnMessage = global.onmessage;
-	            global.onmessage = function() {
-	                postMessageIsAsynchronous = false;
-	            };
-	            global.postMessage("", "*");
-	            global.onmessage = oldOnMessage;
-	            return postMessageIsAsynchronous;
-	        }
-	    }
-
-	    function installPostMessageImplementation() {
-	        // Installs an event handler on `global` for the `message` event: see
-	        // * https://developer.mozilla.org/en/DOM/window.postMessage
-	        // * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
-
-	        var messagePrefix = "setImmediate$" + Math.random() + "$";
-	        var onGlobalMessage = function(event) {
-	            if (event.source === global &&
-	                typeof event.data === "string" &&
-	                event.data.indexOf(messagePrefix) === 0) {
-	                runIfPresent(+event.data.slice(messagePrefix.length));
-	            }
-	        };
-
-	        if (global.addEventListener) {
-	            global.addEventListener("message", onGlobalMessage, false);
-	        } else {
-	            global.attachEvent("onmessage", onGlobalMessage);
-	        }
-
-	        setImmediate = function() {
-	            var handle = addFromSetImmediateArguments(arguments);
-	            global.postMessage(messagePrefix + handle, "*");
-	            return handle;
-	        };
-	    }
-
-	    function installMessageChannelImplementation() {
-	        var channel = new MessageChannel();
-	        channel.port1.onmessage = function(event) {
-	            var handle = event.data;
-	            runIfPresent(handle);
-	        };
-
-	        setImmediate = function() {
-	            var handle = addFromSetImmediateArguments(arguments);
-	            channel.port2.postMessage(handle);
-	            return handle;
-	        };
-	    }
-
-	    function installReadyStateChangeImplementation() {
-	        var html = doc.documentElement;
-	        setImmediate = function() {
-	            var handle = addFromSetImmediateArguments(arguments);
-	            // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-	            // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-	            var script = doc.createElement("script");
-	            script.onreadystatechange = function () {
-	                runIfPresent(handle);
-	                script.onreadystatechange = null;
-	                html.removeChild(script);
-	                script = null;
-	            };
-	            html.appendChild(script);
-	            return handle;
-	        };
-	    }
-
-	    function installSetTimeoutImplementation() {
-	        setImmediate = function() {
-	            var handle = addFromSetImmediateArguments(arguments);
-	            setTimeout(partiallyApplied(runIfPresent, handle), 0);
-	            return handle;
-	        };
-	    }
-
-	    // If supported, we should attach to the prototype of global, since that is where setTimeout et al. live.
-	    var attachTo = Object.getPrototypeOf && Object.getPrototypeOf(global);
-	    attachTo = attachTo && attachTo.setTimeout ? attachTo : global;
-
-	    // Don't get fooled by e.g. browserify environments.
-	    if ({}.toString.call(global.process) === "[object process]") {
-	        // For Node.js before 0.9
-	        installNextTickImplementation();
-
-	    } else if (canUsePostMessage()) {
-	        // For non-IE10 modern browsers
-	        installPostMessageImplementation();
-
-	    } else if (global.MessageChannel) {
-	        // For web workers, where supported
-	        installMessageChannelImplementation();
-
-	    } else if (doc && "onreadystatechange" in doc.createElement("script")) {
-	        // For IE 6–8
-	        installReadyStateChangeImplementation();
-
-	    } else {
-	        // For older browsers
-	        installSetTimeoutImplementation();
-	    }
-
-	    attachTo.setImmediate = setImmediate;
-	    attachTo.clearImmediate = clearImmediate;
-	}(new Function("return this")()));
-	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(12)))
-
-/***/ },
-/* 5 */
 /***/ function(module, exports, __webpack_require__) {
 
 	//
@@ -1274,7 +1090,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 6 */
+/* 5 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -1297,16 +1113,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 7 */
+/* 6 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var globalDocument = __webpack_require__(18)
-	var DataSet = __webpack_require__(32)
-	var createStore = __webpack_require__(34)
+	var globalDocument = __webpack_require__(16)
+	var DataSet = __webpack_require__(30)
+	var createStore = __webpack_require__(32)
 
-	var addEvent = __webpack_require__(14)
-	var removeEvent = __webpack_require__(15)
-	var ProxyEvent = __webpack_require__(16)
+	var addEvent = __webpack_require__(13)
+	var removeEvent = __webpack_require__(14)
+	var ProxyEvent = __webpack_require__(15)
 
 	var HANDLER_STORE = createStore()
 
@@ -1476,7 +1292,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 8 */
+/* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var classIdSplit = /([\.#]?[a-zA-Z0-9_:-]+)/
@@ -1531,7 +1347,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 9 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = SoftSetHook;
@@ -1552,10 +1368,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 10 */
+/* 9 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(35)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = DataSetHook;
 
@@ -1576,10 +1392,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 11 */
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(35)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = DataSetHook;
 
@@ -1607,76 +1423,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 12 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// shim for using process in browser
-
-	var process = module.exports = {};
-
-	process.nextTick = (function () {
-	    var canSetImmediate = typeof window !== 'undefined'
-	    && window.setImmediate;
-	    var canPost = typeof window !== 'undefined'
-	    && window.postMessage && window.addEventListener
-	    ;
-
-	    if (canSetImmediate) {
-	        return function (f) { return window.setImmediate(f) };
-	    }
-
-	    if (canPost) {
-	        var queue = [];
-	        window.addEventListener('message', function (ev) {
-	            var source = ev.source;
-	            if ((source === window || source === null) && ev.data === 'process-tick') {
-	                ev.stopPropagation();
-	                if (queue.length > 0) {
-	                    var fn = queue.shift();
-	                    fn();
-	                }
-	            }
-	        }, true);
-
-	        return function nextTick(fn) {
-	            queue.push(fn);
-	            window.postMessage('process-tick', '*');
-	        };
-	    }
-
-	    return function nextTick(fn) {
-	        setTimeout(fn, 0);
-	    };
-	})();
-
-	process.title = 'browser';
-	process.browser = true;
-	process.env = {};
-	process.argv = [];
-
-	function noop() {}
-
-	process.on = noop;
-	process.addListener = noop;
-	process.once = noop;
-	process.off = noop;
-	process.removeListener = noop;
-	process.removeAllListeners = noop;
-	process.emit = noop;
-
-	process.binding = function (name) {
-	    throw new Error('process.binding is not supported');
-	}
-
-	// TODO(shtylman)
-	process.cwd = function () { return '/' };
-	process.chdir = function (dir) {
-	    throw new Error('process.chdir is not supported');
-	};
-
-
-/***/ },
-/* 13 */
+/* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -1701,143 +1448,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 14 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(32)
-
-	module.exports = addEvent
-
-	function addEvent(target, type, handler) {
-	    var ds = DataSet(target)
-	    var events = ds[type]
-
-	    if (!events) {
-	        ds[type] = handler
-	    } else if (Array.isArray(events)) {
-	        if (events.indexOf(handler) === -1) {
-	            events.push(handler)
-	        }
-	    } else if (events !== handler) {
-	        ds[type] = [events, handler]
-	    }
-	}
-
-
-/***/ },
-/* 15 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var DataSet = __webpack_require__(32)
-
-	module.exports = removeEvent
-
-	function removeEvent(target, type, handler) {
-	    var ds = DataSet(target)
-	    var events = ds[type]
-
-	    if (!events) {
-	        return
-	    } else if (Array.isArray(events)) {
-	        var index = events.indexOf(handler)
-	        if (index !== -1) {
-	            events.splice(index, 1)
-	        }
-	    } else if (events === handler) {
-	        ds[type] = null
-	    }
-	}
-
-
-/***/ },
-/* 16 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var inherits = __webpack_require__(50)
-
-	var ALL_PROPS = [
-	    "altKey", "bubbles", "cancelable", "ctrlKey",
-	    "eventPhase", "metaKey", "relatedTarget", "shiftKey",
-	    "target", "timeStamp", "type", "view", "which"
-	]
-	var KEY_PROPS = ["char", "charCode", "key", "keyCode"]
-	var MOUSE_PROPS = [
-	    "button", "buttons", "clientX", "clientY", "layerX",
-	    "layerY", "offsetX", "offsetY", "pageX", "pageY",
-	    "screenX", "screenY", "toElement"
-	]
-
-	var rkeyEvent = /^key|input/
-	var rmouseEvent = /^(?:mouse|pointer|contextmenu)|click/
-
-	module.exports = ProxyEvent
-
-	function ProxyEvent(ev) {
-	    if (!(this instanceof ProxyEvent)) {
-	        return new ProxyEvent(ev)
-	    }
-
-	    if (rkeyEvent.test(ev.type)) {
-	        return new KeyEvent(ev)
-	    } else if (rmouseEvent.test(ev.type)) {
-	        return new MouseEvent(ev)
-	    }
-
-	    for (var i = 0; i < ALL_PROPS.length; i++) {
-	        var propKey = ALL_PROPS[i]
-	        this[propKey] = ev[propKey]
-	    }
-
-	    this._rawEvent = ev
-	    this._bubbles = false;
-	}
-
-	ProxyEvent.prototype.preventDefault = function () {
-	    this._rawEvent.preventDefault()
-	}
-
-	ProxyEvent.prototype.startPropagation = function () {
-	    this._bubbles = true;
-	}
-
-	function MouseEvent(ev) {
-	    for (var i = 0; i < ALL_PROPS.length; i++) {
-	        var propKey = ALL_PROPS[i]
-	        this[propKey] = ev[propKey]
-	    }
-
-	    for (var j = 0; j < MOUSE_PROPS.length; j++) {
-	        var mousePropKey = MOUSE_PROPS[j]
-	        this[mousePropKey] = ev[mousePropKey]
-	    }
-
-	    this._rawEvent = ev
-	}
-
-	inherits(MouseEvent, ProxyEvent)
-
-	function KeyEvent(ev) {
-	    for (var i = 0; i < ALL_PROPS.length; i++) {
-	        var propKey = ALL_PROPS[i]
-	        this[propKey] = ev[propKey]
-	    }
-
-	    for (var j = 0; j < KEY_PROPS.length; j++) {
-	        var keyPropKey = KEY_PROPS[j]
-	        this[keyPropKey] = ev[keyPropKey]
-	    }
-
-	    this._rawEvent = ev
-	}
-
-	inherits(KeyEvent, ProxyEvent)
-
-
-/***/ },
-/* 17 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var now = __webpack_require__(61)
+	var now = __webpack_require__(59)
 	  , global = typeof window === 'undefined' ? {} : window
 	  , vendors = ['moz', 'webkit']
 	  , suffix = 'AnimationFrame'
@@ -1920,12 +1534,145 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 18 */
+/* 13 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var DataSet = __webpack_require__(30)
+
+	module.exports = addEvent
+
+	function addEvent(target, type, handler) {
+	    var ds = DataSet(target)
+	    var events = ds[type]
+
+	    if (!events) {
+	        ds[type] = handler
+	    } else if (Array.isArray(events)) {
+	        if (events.indexOf(handler) === -1) {
+	            events.push(handler)
+	        }
+	    } else if (events !== handler) {
+	        ds[type] = [events, handler]
+	    }
+	}
+
+
+/***/ },
+/* 14 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var DataSet = __webpack_require__(30)
+
+	module.exports = removeEvent
+
+	function removeEvent(target, type, handler) {
+	    var ds = DataSet(target)
+	    var events = ds[type]
+
+	    if (!events) {
+	        return
+	    } else if (Array.isArray(events)) {
+	        var index = events.indexOf(handler)
+	        if (index !== -1) {
+	            events.splice(index, 1)
+	        }
+	    } else if (events === handler) {
+	        ds[type] = null
+	    }
+	}
+
+
+/***/ },
+/* 15 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var inherits = __webpack_require__(48)
+
+	var ALL_PROPS = [
+	    "altKey", "bubbles", "cancelable", "ctrlKey",
+	    "eventPhase", "metaKey", "relatedTarget", "shiftKey",
+	    "target", "timeStamp", "type", "view", "which"
+	]
+	var KEY_PROPS = ["char", "charCode", "key", "keyCode"]
+	var MOUSE_PROPS = [
+	    "button", "buttons", "clientX", "clientY", "layerX",
+	    "layerY", "offsetX", "offsetY", "pageX", "pageY",
+	    "screenX", "screenY", "toElement"
+	]
+
+	var rkeyEvent = /^key|input/
+	var rmouseEvent = /^(?:mouse|pointer|contextmenu)|click/
+
+	module.exports = ProxyEvent
+
+	function ProxyEvent(ev) {
+	    if (!(this instanceof ProxyEvent)) {
+	        return new ProxyEvent(ev)
+	    }
+
+	    if (rkeyEvent.test(ev.type)) {
+	        return new KeyEvent(ev)
+	    } else if (rmouseEvent.test(ev.type)) {
+	        return new MouseEvent(ev)
+	    }
+
+	    for (var i = 0; i < ALL_PROPS.length; i++) {
+	        var propKey = ALL_PROPS[i]
+	        this[propKey] = ev[propKey]
+	    }
+
+	    this._rawEvent = ev
+	    this._bubbles = false;
+	}
+
+	ProxyEvent.prototype.preventDefault = function () {
+	    this._rawEvent.preventDefault()
+	}
+
+	ProxyEvent.prototype.startPropagation = function () {
+	    this._bubbles = true;
+	}
+
+	function MouseEvent(ev) {
+	    for (var i = 0; i < ALL_PROPS.length; i++) {
+	        var propKey = ALL_PROPS[i]
+	        this[propKey] = ev[propKey]
+	    }
+
+	    for (var j = 0; j < MOUSE_PROPS.length; j++) {
+	        var mousePropKey = MOUSE_PROPS[j]
+	        this[mousePropKey] = ev[mousePropKey]
+	    }
+
+	    this._rawEvent = ev
+	}
+
+	inherits(MouseEvent, ProxyEvent)
+
+	function KeyEvent(ev) {
+	    for (var i = 0; i < ALL_PROPS.length; i++) {
+	        var propKey = ALL_PROPS[i]
+	        this[propKey] = ev[propKey]
+	    }
+
+	    for (var j = 0; j < KEY_PROPS.length; j++) {
+	        var keyPropKey = KEY_PROPS[j]
+	        this[keyPropKey] = ev[keyPropKey]
+	    }
+
+	    this._rawEvent = ev
+	}
+
+	inherits(KeyEvent, ProxyEvent)
+
+
+/***/ },
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
 	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(33);
+	var minDoc = __webpack_require__(31);
 
 	if (typeof document !== 'undefined') {
 	    module.exports = document;
@@ -1942,19 +1689,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 19 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isArray = __webpack_require__(52)
-	var isObject = __webpack_require__(53)
+	var isArray = __webpack_require__(50)
+	var isObject = __webpack_require__(51)
 
-	var VPatch = __webpack_require__(36)
-	var isVNode = __webpack_require__(37)
-	var isVText = __webpack_require__(38)
-	var isWidget = __webpack_require__(39)
-	var isThunk = __webpack_require__(40)
-	var isHook = __webpack_require__(41)
-	var handleThunk = __webpack_require__(42)
+	var VPatch = __webpack_require__(34)
+	var isVNode = __webpack_require__(35)
+	var isVText = __webpack_require__(36)
+	var isWidget = __webpack_require__(37)
+	var isThunk = __webpack_require__(38)
+	var isHook = __webpack_require__(39)
+	var handleThunk = __webpack_require__(40)
 
 	module.exports = diff
 
@@ -2262,17 +2009,17 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 20 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(62)
+	var document = __webpack_require__(60)
 
-	var applyProperties = __webpack_require__(43)
+	var applyProperties = __webpack_require__(41)
 
-	var isVNode = __webpack_require__(37)
-	var isVText = __webpack_require__(38)
-	var isWidget = __webpack_require__(39)
-	var handleThunk = __webpack_require__(42)
+	var isVNode = __webpack_require__(35)
+	var isVText = __webpack_require__(36)
+	var isWidget = __webpack_require__(37)
+	var handleThunk = __webpack_require__(40)
 
 	module.exports = createElement
 
@@ -2314,14 +2061,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 21 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(62)
-	var isArray = __webpack_require__(55)
+	var document = __webpack_require__(60)
+	var isArray = __webpack_require__(53)
 
-	var domIndex = __webpack_require__(44)
-	var patchOp = __webpack_require__(45)
+	var domIndex = __webpack_require__(42)
+	var patchOp = __webpack_require__(43)
 	module.exports = patch
 
 	function patch(rootNode, patches) {
@@ -2396,12 +2143,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 22 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var camelize = __webpack_require__(57)
-	var template = __webpack_require__(58)
-	var extend = __webpack_require__(63)
+	var camelize = __webpack_require__(55)
+	var template = __webpack_require__(56)
+	var extend = __webpack_require__(61)
 
 	module.exports = TypedError
 
@@ -2450,13 +2197,67 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 23 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(46)
-	var isVNode = __webpack_require__(25)
-	var isWidget = __webpack_require__(27)
-	var isVHook = __webpack_require__(28)
+	var camelize = __webpack_require__(57)
+	var template = __webpack_require__(58)
+	var extend = __webpack_require__(45)
+
+	module.exports = TypedError
+
+	function TypedError(args) {
+	    if (!args) {
+	        throw new Error("args is required");
+	    }
+	    if (!args.type) {
+	        throw new Error("args.type is required");
+	    }
+	    if (!args.message) {
+	        throw new Error("args.message is required");
+	    }
+
+	    var message = args.message
+
+	    if (args.type && !args.name) {
+	        var errorName = camelize(args.type) + "Error"
+	        args.name = errorName[0].toUpperCase() + errorName.substr(1)
+	    }
+
+	    createError.type = args.type;
+	    createError._name = args.name;
+
+	    return createError;
+
+	    function createError(opts) {
+	        var result = new Error()
+
+	        Object.defineProperty(result, "type", {
+	            value: result.type,
+	            enumerable: true,
+	            writable: true,
+	            configurable: true
+	        })
+
+	        var options = extend({}, args, opts)
+
+	        extend(result, options)
+	        result.message = template(message, options)
+
+	        return result
+	    }
+	}
+
+
+
+/***/ },
+/* 22 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var version = __webpack_require__(44)
+	var isVNode = __webpack_require__(24)
+	var isWidget = __webpack_require__(26)
+	var isVHook = __webpack_require__(27)
 
 	module.exports = VirtualNode
 
@@ -2498,10 +2299,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 24 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(46)
+	var version = __webpack_require__(44)
 
 	module.exports = VirtualText
 
@@ -2514,10 +2315,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 25 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(46)
+	var version = __webpack_require__(44)
 
 	module.exports = isVirtualNode
 
@@ -2527,10 +2328,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 26 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(46)
+	var version = __webpack_require__(44)
 
 	module.exports = isVirtualText
 
@@ -2540,7 +2341,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 27 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isWidget
@@ -2551,7 +2352,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 28 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isHook
@@ -2563,7 +2364,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 29 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isThunk
@@ -2574,61 +2375,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 30 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var camelize = __webpack_require__(59)
-	var template = __webpack_require__(60)
-	var extend = __webpack_require__(47)
-
-	module.exports = TypedError
-
-	function TypedError(args) {
-	    if (!args) {
-	        throw new Error("args is required");
-	    }
-	    if (!args.type) {
-	        throw new Error("args.type is required");
-	    }
-	    if (!args.message) {
-	        throw new Error("args.message is required");
-	    }
-
-	    var message = args.message
-
-	    if (args.type && !args.name) {
-	        var errorName = camelize(args.type) + "Error"
-	        args.name = errorName[0].toUpperCase() + errorName.substr(1)
-	    }
-
-	    createError.type = args.type;
-	    createError._name = args.name;
-
-	    return createError;
-
-	    function createError(opts) {
-	        var result = new Error()
-
-	        Object.defineProperty(result, "type", {
-	            value: result.type,
-	            enumerable: true,
-	            writable: true,
-	            configurable: true
-	        })
-
-	        var options = extend({}, args, opts)
-
-	        extend(result, options)
-	        result.message = template(message, options)
-
-	        return result
-	    }
-	}
-
-
-
-/***/ },
-/* 31 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -2744,13 +2491,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 32 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(34)
-	var Individual = __webpack_require__(13)
+	var createStore = __webpack_require__(32)
+	var Individual = __webpack_require__(11)
 
-	var createHash = __webpack_require__(48)
+	var createHash = __webpack_require__(46)
 
 	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
 
@@ -2768,16 +2515,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 33 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* (ignored) */
 
 /***/ },
-/* 34 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(49);
+	var hiddenStore = __webpack_require__(47);
 
 	module.exports = createStore;
 
@@ -2797,13 +2544,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 35 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(67)
-	var Individual = __webpack_require__(65)
+	var createStore = __webpack_require__(65)
+	var Individual = __webpack_require__(63)
 
-	var createHash = __webpack_require__(51)
+	var createHash = __webpack_require__(49)
 
 	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
 
@@ -2821,10 +2568,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 36 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(54)
+	var version = __webpack_require__(52)
 
 	VirtualPatch.NONE = 0
 	VirtualPatch.VTEXT = 1
@@ -2849,10 +2596,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 37 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(54)
+	var version = __webpack_require__(52)
 
 	module.exports = isVirtualNode
 
@@ -2862,10 +2609,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 38 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(54)
+	var version = __webpack_require__(52)
 
 	module.exports = isVirtualText
 
@@ -2875,7 +2622,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 39 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isWidget
@@ -2886,7 +2633,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 40 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isThunk
@@ -2897,7 +2644,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 41 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isHook
@@ -2909,13 +2656,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 42 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isVNode = __webpack_require__(37)
-	var isVText = __webpack_require__(38)
-	var isWidget = __webpack_require__(39)
-	var isThunk = __webpack_require__(40)
+	var isVNode = __webpack_require__(35)
+	var isVText = __webpack_require__(36)
+	var isWidget = __webpack_require__(37)
+	var isThunk = __webpack_require__(38)
 
 	module.exports = handleThunk
 
@@ -2955,11 +2702,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 43 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isObject = __webpack_require__(64)
-	var isHook = __webpack_require__(41)
+	var isObject = __webpack_require__(62)
+	var isHook = __webpack_require__(39)
 
 	module.exports = applyProperties
 
@@ -3057,7 +2804,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 44 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Maps a virtual DOM tree onto a real DOM tree in an efficient manner.
@@ -3148,16 +2895,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 45 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var applyProperties = __webpack_require__(43)
+	var applyProperties = __webpack_require__(41)
 
-	var isWidget = __webpack_require__(39)
-	var VPatch = __webpack_require__(36)
+	var isWidget = __webpack_require__(37)
+	var VPatch = __webpack_require__(34)
 
-	var render = __webpack_require__(20)
-	var updateWidget = __webpack_require__(56)
+	var render = __webpack_require__(18)
+	var updateWidget = __webpack_require__(54)
 
 	module.exports = applyPatch
 
@@ -3322,14 +3069,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 46 */
+/* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = "1"
 
 
 /***/ },
-/* 47 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3350,7 +3097,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 48 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3378,7 +3125,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 49 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = hiddenStore;
@@ -3400,7 +3147,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 50 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	if (typeof Object.create === 'function') {
@@ -3429,7 +3176,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 51 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3457,7 +3204,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 52 */
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var nativeIsArray = Array.isArray
@@ -3471,7 +3218,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 53 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isObject
@@ -3482,14 +3229,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 54 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = "1"
 
 
 /***/ },
-/* 55 */
+/* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var nativeIsArray = Array.isArray
@@ -3503,10 +3250,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 56 */
+/* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isWidget = __webpack_require__(39)
+	var isWidget = __webpack_require__(37)
 
 	module.exports = updateWidget
 
@@ -3520,6 +3267,111 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 
 	    return false
+	}
+
+
+/***/ },
+/* 55 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = function(obj) {
+	    if (typeof obj === 'string') return camelCase(obj);
+	    return walk(obj);
+	};
+
+	function walk (obj) {
+	    if (!obj || typeof obj !== 'object') return obj;
+	    if (isDate(obj) || isRegex(obj)) return obj;
+	    if (isArray(obj)) return map(obj, walk);
+	    return reduce(objectKeys(obj), function (acc, key) {
+	        var camel = camelCase(key);
+	        acc[camel] = walk(obj[key]);
+	        return acc;
+	    }, {});
+	}
+
+	function camelCase(str) {
+	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
+	        return x.toUpperCase();
+	    });
+	}
+
+	var isArray = Array.isArray || function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Array]';
+	};
+
+	var isDate = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Date]';
+	};
+
+	var isRegex = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object RegExp]';
+	};
+
+	var has = Object.prototype.hasOwnProperty;
+	var objectKeys = Object.keys || function (obj) {
+	    var keys = [];
+	    for (var key in obj) {
+	        if (has.call(obj, key)) keys.push(key);
+	    }
+	    return keys;
+	};
+
+	function map (xs, f) {
+	    if (xs.map) return xs.map(f);
+	    var res = [];
+	    for (var i = 0; i < xs.length; i++) {
+	        res.push(f(xs[i], i));
+	    }
+	    return res;
+	}
+
+	function reduce (xs, f, acc) {
+	    if (xs.reduce) return xs.reduce(f, acc);
+	    for (var i = 0; i < xs.length; i++) {
+	        acc = f(acc, xs[i], i);
+	    }
+	    return acc;
+	}
+
+
+/***/ },
+/* 56 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var nargs = /\{([0-9a-zA-Z]+)\}/g
+	var slice = Array.prototype.slice
+
+	module.exports = template
+
+	function template(string) {
+	    var args
+
+	    if (arguments.length === 2 && typeof arguments[1] === "object") {
+	        args = arguments[1]
+	    } else {
+	        args = slice.call(arguments, 1)
+	    }
+
+	    if (!args || !args.hasOwnProperty) {
+	        args = {}
+	    }
+
+	    return string.replace(nargs, function replaceArg(match, i, index) {
+	        var result
+
+	        if (string[index - 1] === "{" &&
+	            string[index + match.length] === "}") {
+	            return i
+	        } else {
+	            result = args.hasOwnProperty(i) ? args[i] : null
+	            if (result === null || result === undefined) {
+	                return ""
+	            }
+
+	            return result
+	        }
+	    })
 	}
 
 
@@ -3632,111 +3484,6 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = function(obj) {
-	    if (typeof obj === 'string') return camelCase(obj);
-	    return walk(obj);
-	};
-
-	function walk (obj) {
-	    if (!obj || typeof obj !== 'object') return obj;
-	    if (isDate(obj) || isRegex(obj)) return obj;
-	    if (isArray(obj)) return map(obj, walk);
-	    return reduce(objectKeys(obj), function (acc, key) {
-	        var camel = camelCase(key);
-	        acc[camel] = walk(obj[key]);
-	        return acc;
-	    }, {});
-	}
-
-	function camelCase(str) {
-	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
-	        return x.toUpperCase();
-	    });
-	}
-
-	var isArray = Array.isArray || function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Array]';
-	};
-
-	var isDate = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Date]';
-	};
-
-	var isRegex = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object RegExp]';
-	};
-
-	var has = Object.prototype.hasOwnProperty;
-	var objectKeys = Object.keys || function (obj) {
-	    var keys = [];
-	    for (var key in obj) {
-	        if (has.call(obj, key)) keys.push(key);
-	    }
-	    return keys;
-	};
-
-	function map (xs, f) {
-	    if (xs.map) return xs.map(f);
-	    var res = [];
-	    for (var i = 0; i < xs.length; i++) {
-	        res.push(f(xs[i], i));
-	    }
-	    return res;
-	}
-
-	function reduce (xs, f, acc) {
-	    if (xs.reduce) return xs.reduce(f, acc);
-	    for (var i = 0; i < xs.length; i++) {
-	        acc = f(acc, xs[i], i);
-	    }
-	    return acc;
-	}
-
-
-/***/ },
-/* 60 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var nargs = /\{([0-9a-zA-Z]+)\}/g
-	var slice = Array.prototype.slice
-
-	module.exports = template
-
-	function template(string) {
-	    var args
-
-	    if (arguments.length === 2 && typeof arguments[1] === "object") {
-	        args = arguments[1]
-	    } else {
-	        args = slice.call(arguments, 1)
-	    }
-
-	    if (!args || !args.hasOwnProperty) {
-	        args = {}
-	    }
-
-	    return string.replace(nargs, function replaceArg(match, i, index) {
-	        var result
-
-	        if (string[index - 1] === "{" &&
-	            string[index + match.length] === "}") {
-	            return i
-	        } else {
-	            result = args.hasOwnProperty(i) ? args[i] : null
-	            if (result === null || result === undefined) {
-	                return ""
-	            }
-
-	            return result
-	        }
-	    })
-	}
-
-
-/***/ },
-/* 61 */
-/***/ function(module, exports, __webpack_require__) {
-
 	/* WEBPACK VAR INJECTION */(function(process) {// Generated by CoffeeScript 1.6.3
 	(function() {
 	  var getNanoSeconds, hrtime, loadTime;
@@ -3774,15 +3521,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	//@ sourceMappingURL=performance-now.map
 	*/
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(12)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(66)))
 
 /***/ },
-/* 62 */
+/* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
 	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(66);
+	var minDoc = __webpack_require__(64);
 
 	if (typeof document !== 'undefined') {
 	    module.exports = document;
@@ -3799,7 +3546,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 63 */
+/* 61 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3820,7 +3567,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 64 */
+/* 62 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isObject
@@ -3831,7 +3578,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 65 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -3856,16 +3603,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 66 */
+/* 64 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* (ignored) */
 
 /***/ },
-/* 67 */
+/* 65 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(68);
+	var hiddenStore = __webpack_require__(67);
 
 	module.exports = createStore;
 
@@ -3885,7 +3632,76 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 68 */
+/* 66 */
+/***/ function(module, exports, __webpack_require__) {
+
+	// shim for using process in browser
+
+	var process = module.exports = {};
+
+	process.nextTick = (function () {
+	    var canSetImmediate = typeof window !== 'undefined'
+	    && window.setImmediate;
+	    var canPost = typeof window !== 'undefined'
+	    && window.postMessage && window.addEventListener
+	    ;
+
+	    if (canSetImmediate) {
+	        return function (f) { return window.setImmediate(f) };
+	    }
+
+	    if (canPost) {
+	        var queue = [];
+	        window.addEventListener('message', function (ev) {
+	            var source = ev.source;
+	            if ((source === window || source === null) && ev.data === 'process-tick') {
+	                ev.stopPropagation();
+	                if (queue.length > 0) {
+	                    var fn = queue.shift();
+	                    fn();
+	                }
+	            }
+	        }, true);
+
+	        return function nextTick(fn) {
+	            queue.push(fn);
+	            window.postMessage('process-tick', '*');
+	        };
+	    }
+
+	    return function nextTick(fn) {
+	        setTimeout(fn, 0);
+	    };
+	})();
+
+	process.title = 'browser';
+	process.browser = true;
+	process.env = {};
+	process.argv = [];
+
+	function noop() {}
+
+	process.on = noop;
+	process.addListener = noop;
+	process.once = noop;
+	process.off = noop;
+	process.removeListener = noop;
+	process.removeAllListeners = noop;
+	process.emit = noop;
+
+	process.binding = function (name) {
+	    throw new Error('process.binding is not supported');
+	}
+
+	// TODO(shtylman)
+	process.cwd = function () { return '/' };
+	process.chdir = function (dir) {
+	    throw new Error('process.chdir is not supported');
+	};
+
+
+/***/ },
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = hiddenStore;
