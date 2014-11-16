@@ -37,6 +37,11 @@ var Component = Stapes.subclass({
     this.state = newState;
     this._observ.set('state', newState);
   },
+  getDOMNode: function() {
+    return this._elem || null;
+  },
+  componentWillMount: function() {},
+  componentDidMount: function() {},
   addEventListener: function(cb) {
     this._observ.on('change:state', cb);
   }
@@ -59,7 +64,8 @@ function createFactory(Component) {
     var component = new Component(props);
 
     return h('div', {
-      'key': component.displayName
+      'key': component.displayName,
+      'ev-lifecycle': new LifecycleHook(component)
     }, component.render());
   };
 }
@@ -72,6 +78,30 @@ function isValidComponent(component) {
 
   return true;
 }
+
+// Lifecycle hook
+
+function LifecycleHook(component) {
+  this.component = component;
+}
+
+LifecycleHook.prototype.hook = function (elem, propName) {
+  this.component._elem = elem;
+
+  if (!this.component._mounted) {
+    this.component.componentWillMount();
+  } else {
+    this.component.componentWillUpdate();
+  }
+
+  setImmediate(function() {
+    if (!this.component._mounted) {
+      this.component.componentDidMount();
+    } else {
+      this.component.componentDidUpdate();
+    }
+  }.bind(this));
+};
 
 
 // Main entry func
