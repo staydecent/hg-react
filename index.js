@@ -1,3 +1,5 @@
+require("setimmediate");
+
 var Delegator = require('dom-delegator');
 var Loop = require('main-loop');
 var h = require('virtual-hyperscript');

@@ -106,12 +106,14 @@
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
+	__webpack_require__(5);
+
 	var Delegator = __webpack_require__(2);
 	var Loop = __webpack_require__(3);
 	var h = __webpack_require__(4);
 
-	var Stapes = __webpack_require__(5);
-	var xtend = __webpack_require__(6);
+	var Stapes = __webpack_require__(6);
+	var xtend = __webpack_require__(7);
 
 
 	module.exports = {
@@ -145,6 +147,11 @@
 	    this.state = newState;
 	    this._observ.set('state', newState);
 	  },
+	  getDOMNode: function() {
+	    return this._elem || null;
+	  },
+	  componentWillMount: function() {},
+	  componentDidMount: function() {},
 	  addEventListener: function(cb) {
 	    this._observ.on('change:state', cb);
 	  }
@@ -167,7 +174,8 @@
 	    var component = new Component(props);
 
 	    return h('div', {
-	      'key': component.displayName
+	      'key': component.displayName,
+	      'ev-lifecycle': new LifecycleHook(component)
 	    }, component.render());
 	  };
 	}
@@ -180,6 +188,30 @@
 
 	  return true;
 	}
+
+	// Lifecycle hook
+
+	function LifecycleHook(component) {
+	  this.component = component;
+	}
+
+	LifecycleHook.prototype.hook = function (elem, propName) {
+	  this.component._elem = elem;
+
+	  if (!this.component._mounted) {
+	    this.component.componentWillMount();
+	  } else {
+	    this.component.componentWillUpdate();
+	  }
+
+	  setImmediate(function() {
+	    if (!this.component._mounted) {
+	      this.component.componentDidMount();
+	    } else {
+	      this.component.componentDidUpdate();
+	    }
+	  }.bind(this));
+	};
 
 
 	// Main entry func
@@ -209,11 +241,11 @@
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Individual = __webpack_require__(12)
-	var cuid = __webpack_require__(30)
-	var globalDocument = __webpack_require__(17)
+	var Individual = __webpack_require__(14)
+	var cuid = __webpack_require__(32)
+	var globalDocument = __webpack_require__(19)
 
-	var DOMDelegator = __webpack_require__(7)
+	var DOMDelegator = __webpack_require__(8)
 
 	var versionKey = "11"
 	var cacheKey = "__DOM_DELEGATOR_CACHE@" + versionKey
@@ -275,11 +307,11 @@
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var raf = __webpack_require__(16)
-	var vtreeDiff = __webpack_require__(18)
-	var vdomCreate = __webpack_require__(19)
-	var vdomPatch = __webpack_require__(20)
-	var TypedError = __webpack_require__(21)
+	var raf = __webpack_require__(18)
+	var vtreeDiff = __webpack_require__(20)
+	var vdomCreate = __webpack_require__(21)
+	var vdomPatch = __webpack_require__(22)
+	var TypedError = __webpack_require__(23)
 
 	var InvalidUpdateInRender = TypedError({
 	    type: "main-loop.invalid.update.in-render",
@@ -359,19 +391,19 @@
 /* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var VNode = __webpack_require__(22)
-	var VText = __webpack_require__(23)
-	var isVNode = __webpack_require__(24)
-	var isVText = __webpack_require__(25)
-	var isWidget = __webpack_require__(26)
-	var isHook = __webpack_require__(27)
-	var isVThunk = __webpack_require__(28)
-	var TypedError = __webpack_require__(29)
+	var VNode = __webpack_require__(24)
+	var VText = __webpack_require__(25)
+	var isVNode = __webpack_require__(26)
+	var isVText = __webpack_require__(27)
+	var isWidget = __webpack_require__(28)
+	var isHook = __webpack_require__(29)
+	var isVThunk = __webpack_require__(30)
+	var TypedError = __webpack_require__(31)
 
-	var parseTag = __webpack_require__(8)
-	var softSetHook = __webpack_require__(9)
-	var dataSetHook = __webpack_require__(10)
-	var evHook = __webpack_require__(11)
+	var parseTag = __webpack_require__(9)
+	var softSetHook = __webpack_require__(10)
+	var dataSetHook = __webpack_require__(11)
+	var evHook = __webpack_require__(12)
 
 	var UnexpectedVirtualElement = TypedError({
 	    type: "virtual-hyperscript.unexpected.virtual-element",
@@ -489,6 +521,188 @@
 
 /***/ },
 /* 5 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/* WEBPACK VAR INJECTION */(function(process) {(function (global, undefined) {
+	    "use strict";
+
+	    if (global.setImmediate) {
+	        return;
+	    }
+
+	    var nextHandle = 1; // Spec says greater than zero
+	    var tasksByHandle = {};
+	    var currentlyRunningATask = false;
+	    var doc = global.document;
+	    var setImmediate;
+
+	    function addFromSetImmediateArguments(args) {
+	        tasksByHandle[nextHandle] = partiallyApplied.apply(undefined, args);
+	        return nextHandle++;
+	    }
+
+	    // This function accepts the same arguments as setImmediate, but
+	    // returns a function that requires no arguments.
+	    function partiallyApplied(handler) {
+	        var args = [].slice.call(arguments, 1);
+	        return function() {
+	            if (typeof handler === "function") {
+	                handler.apply(undefined, args);
+	            } else {
+	                (new Function("" + handler))();
+	            }
+	        };
+	    }
+
+	    function runIfPresent(handle) {
+	        // From the spec: "Wait until any invocations of this algorithm started before this one have completed."
+	        // So if we're currently running a task, we'll need to delay this invocation.
+	        if (currentlyRunningATask) {
+	            // Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
+	            // "too much recursion" error.
+	            setTimeout(partiallyApplied(runIfPresent, handle), 0);
+	        } else {
+	            var task = tasksByHandle[handle];
+	            if (task) {
+	                currentlyRunningATask = true;
+	                try {
+	                    task();
+	                } finally {
+	                    clearImmediate(handle);
+	                    currentlyRunningATask = false;
+	                }
+	            }
+	        }
+	    }
+
+	    function clearImmediate(handle) {
+	        delete tasksByHandle[handle];
+	    }
+
+	    function installNextTickImplementation() {
+	        setImmediate = function() {
+	            var handle = addFromSetImmediateArguments(arguments);
+	            process.nextTick(partiallyApplied(runIfPresent, handle));
+	            return handle;
+	        };
+	    }
+
+	    function canUsePostMessage() {
+	        // The test against `importScripts` prevents this implementation from being installed inside a web worker,
+	        // where `global.postMessage` means something completely different and can't be used for this purpose.
+	        if (global.postMessage && !global.importScripts) {
+	            var postMessageIsAsynchronous = true;
+	            var oldOnMessage = global.onmessage;
+	            global.onmessage = function() {
+	                postMessageIsAsynchronous = false;
+	            };
+	            global.postMessage("", "*");
+	            global.onmessage = oldOnMessage;
+	            return postMessageIsAsynchronous;
+	        }
+	    }
+
+	    function installPostMessageImplementation() {
+	        // Installs an event handler on `global` for the `message` event: see
+	        // * https://developer.mozilla.org/en/DOM/window.postMessage
+	        // * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
+
+	        var messagePrefix = "setImmediate$" + Math.random() + "$";
+	        var onGlobalMessage = function(event) {
+	            if (event.source === global &&
+	                typeof event.data === "string" &&
+	                event.data.indexOf(messagePrefix) === 0) {
+	                runIfPresent(+event.data.slice(messagePrefix.length));
+	            }
+	        };
+
+	        if (global.addEventListener) {
+	            global.addEventListener("message", onGlobalMessage, false);
+	        } else {
+	            global.attachEvent("onmessage", onGlobalMessage);
+	        }
+
+	        setImmediate = function() {
+	            var handle = addFromSetImmediateArguments(arguments);
+	            global.postMessage(messagePrefix + handle, "*");
+	            return handle;
+	        };
+	    }
+
+	    function installMessageChannelImplementation() {
+	        var channel = new MessageChannel();
+	        channel.port1.onmessage = function(event) {
+	            var handle = event.data;
+	            runIfPresent(handle);
+	        };
+
+	        setImmediate = function() {
+	            var handle = addFromSetImmediateArguments(arguments);
+	            channel.port2.postMessage(handle);
+	            return handle;
+	        };
+	    }
+
+	    function installReadyStateChangeImplementation() {
+	        var html = doc.documentElement;
+	        setImmediate = function() {
+	            var handle = addFromSetImmediateArguments(arguments);
+	            // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+	            // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+	            var script = doc.createElement("script");
+	            script.onreadystatechange = function () {
+	                runIfPresent(handle);
+	                script.onreadystatechange = null;
+	                html.removeChild(script);
+	                script = null;
+	            };
+	            html.appendChild(script);
+	            return handle;
+	        };
+	    }
+
+	    function installSetTimeoutImplementation() {
+	        setImmediate = function() {
+	            var handle = addFromSetImmediateArguments(arguments);
+	            setTimeout(partiallyApplied(runIfPresent, handle), 0);
+	            return handle;
+	        };
+	    }
+
+	    // If supported, we should attach to the prototype of global, since that is where setTimeout et al. live.
+	    var attachTo = Object.getPrototypeOf && Object.getPrototypeOf(global);
+	    attachTo = attachTo && attachTo.setTimeout ? attachTo : global;
+
+	    // Don't get fooled by e.g. browserify environments.
+	    if ({}.toString.call(global.process) === "[object process]") {
+	        // For Node.js before 0.9
+	        installNextTickImplementation();
+
+	    } else if (canUsePostMessage()) {
+	        // For non-IE10 modern browsers
+	        installPostMessageImplementation();
+
+	    } else if (global.MessageChannel) {
+	        // For web workers, where supported
+	        installMessageChannelImplementation();
+
+	    } else if (doc && "onreadystatechange" in doc.createElement("script")) {
+	        // For IE 6–8
+	        installReadyStateChangeImplementation();
+
+	    } else {
+	        // For older browsers
+	        installSetTimeoutImplementation();
+	    }
+
+	    attachTo.setImmediate = setImmediate;
+	    attachTo.clearImmediate = clearImmediate;
+	}(new Function("return this")()));
+	
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(13)))
+
+/***/ },
+/* 6 */
 /***/ function(module, exports, __webpack_require__) {
 
 	//
@@ -1112,7 +1326,7 @@
 
 
 /***/ },
-/* 6 */
+/* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -1135,16 +1349,16 @@
 
 
 /***/ },
-/* 7 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var globalDocument = __webpack_require__(17)
-	var DataSet = __webpack_require__(31)
-	var createStore = __webpack_require__(33)
+	var globalDocument = __webpack_require__(19)
+	var DataSet = __webpack_require__(33)
+	var createStore = __webpack_require__(35)
 
-	var addEvent = __webpack_require__(13)
-	var removeEvent = __webpack_require__(14)
-	var ProxyEvent = __webpack_require__(15)
+	var addEvent = __webpack_require__(15)
+	var removeEvent = __webpack_require__(16)
+	var ProxyEvent = __webpack_require__(17)
 
 	var HANDLER_STORE = createStore()
 
@@ -1314,7 +1528,7 @@
 
 
 /***/ },
-/* 8 */
+/* 9 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var classIdSplit = /([\.#]?[a-zA-Z0-9_:-]+)/
@@ -1369,7 +1583,7 @@
 
 
 /***/ },
-/* 9 */
+/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = SoftSetHook;
@@ -1390,10 +1604,10 @@
 
 
 /***/ },
-/* 10 */
+/* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(34)
+	var DataSet = __webpack_require__(36)
 
 	module.exports = DataSetHook;
 
@@ -1414,10 +1628,10 @@
 
 
 /***/ },
-/* 11 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(34)
+	var DataSet = __webpack_require__(36)
 
 	module.exports = DataSetHook;
 
@@ -1445,7 +1659,76 @@
 
 
 /***/ },
-/* 12 */
+/* 13 */
+/***/ function(module, exports, __webpack_require__) {
+
+	// shim for using process in browser
+
+	var process = module.exports = {};
+
+	process.nextTick = (function () {
+	    var canSetImmediate = typeof window !== 'undefined'
+	    && window.setImmediate;
+	    var canPost = typeof window !== 'undefined'
+	    && window.postMessage && window.addEventListener
+	    ;
+
+	    if (canSetImmediate) {
+	        return function (f) { return window.setImmediate(f) };
+	    }
+
+	    if (canPost) {
+	        var queue = [];
+	        window.addEventListener('message', function (ev) {
+	            var source = ev.source;
+	            if ((source === window || source === null) && ev.data === 'process-tick') {
+	                ev.stopPropagation();
+	                if (queue.length > 0) {
+	                    var fn = queue.shift();
+	                    fn();
+	                }
+	            }
+	        }, true);
+
+	        return function nextTick(fn) {
+	            queue.push(fn);
+	            window.postMessage('process-tick', '*');
+	        };
+	    }
+
+	    return function nextTick(fn) {
+	        setTimeout(fn, 0);
+	    };
+	})();
+
+	process.title = 'browser';
+	process.browser = true;
+	process.env = {};
+	process.argv = [];
+
+	function noop() {}
+
+	process.on = noop;
+	process.addListener = noop;
+	process.once = noop;
+	process.off = noop;
+	process.removeListener = noop;
+	process.removeAllListeners = noop;
+	process.emit = noop;
+
+	process.binding = function (name) {
+	    throw new Error('process.binding is not supported');
+	}
+
+	// TODO(shtylman)
+	process.cwd = function () { return '/' };
+	process.chdir = function (dir) {
+	    throw new Error('process.chdir is not supported');
+	};
+
+
+/***/ },
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -1470,10 +1753,10 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 13 */
+/* 15 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(31)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = addEvent
 
@@ -1494,10 +1777,10 @@
 
 
 /***/ },
-/* 14 */
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataSet = __webpack_require__(31)
+	var DataSet = __webpack_require__(33)
 
 	module.exports = removeEvent
 
@@ -1519,10 +1802,10 @@
 
 
 /***/ },
-/* 15 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var inherits = __webpack_require__(49)
+	var inherits = __webpack_require__(51)
 
 	var ALL_PROPS = [
 	    "altKey", "bubbles", "cancelable", "ctrlKey",
@@ -1603,10 +1886,10 @@
 
 
 /***/ },
-/* 16 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var now = __webpack_require__(60)
+	var now = __webpack_require__(62)
 	  , global = typeof window === 'undefined' ? {} : window
 	  , vendors = ['moz', 'webkit']
 	  , suffix = 'AnimationFrame'
@@ -1689,12 +1972,12 @@
 
 
 /***/ },
-/* 17 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
 	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(32);
+	var minDoc = __webpack_require__(34);
 
 	if (typeof document !== 'undefined') {
 	    module.exports = document;
@@ -1711,19 +1994,19 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 18 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isArray = __webpack_require__(51)
-	var isObject = __webpack_require__(52)
+	var isArray = __webpack_require__(53)
+	var isObject = __webpack_require__(54)
 
-	var VPatch = __webpack_require__(35)
-	var isVNode = __webpack_require__(36)
-	var isVText = __webpack_require__(37)
-	var isWidget = __webpack_require__(38)
-	var isThunk = __webpack_require__(39)
-	var isHook = __webpack_require__(40)
-	var handleThunk = __webpack_require__(41)
+	var VPatch = __webpack_require__(37)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var isThunk = __webpack_require__(41)
+	var isHook = __webpack_require__(42)
+	var handleThunk = __webpack_require__(43)
 
 	module.exports = diff
 
@@ -2031,17 +2314,17 @@
 
 
 /***/ },
-/* 19 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(61)
+	var document = __webpack_require__(63)
 
-	var applyProperties = __webpack_require__(42)
+	var applyProperties = __webpack_require__(44)
 
-	var isVNode = __webpack_require__(36)
-	var isVText = __webpack_require__(37)
-	var isWidget = __webpack_require__(38)
-	var handleThunk = __webpack_require__(41)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var handleThunk = __webpack_require__(43)
 
 	module.exports = createElement
 
@@ -2083,14 +2366,14 @@
 
 
 /***/ },
-/* 20 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var document = __webpack_require__(61)
-	var isArray = __webpack_require__(54)
+	var document = __webpack_require__(63)
+	var isArray = __webpack_require__(56)
 
-	var domIndex = __webpack_require__(43)
-	var patchOp = __webpack_require__(44)
+	var domIndex = __webpack_require__(45)
+	var patchOp = __webpack_require__(46)
 	module.exports = patch
 
 	function patch(rootNode, patches) {
@@ -2165,12 +2448,12 @@
 
 
 /***/ },
-/* 21 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var camelize = __webpack_require__(56)
-	var template = __webpack_require__(57)
-	var extend = __webpack_require__(62)
+	var camelize = __webpack_require__(58)
+	var template = __webpack_require__(59)
+	var extend = __webpack_require__(64)
 
 	module.exports = TypedError
 
@@ -2219,13 +2502,13 @@
 
 
 /***/ },
-/* 22 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(45)
-	var isVNode = __webpack_require__(24)
-	var isWidget = __webpack_require__(26)
-	var isVHook = __webpack_require__(27)
+	var version = __webpack_require__(47)
+	var isVNode = __webpack_require__(26)
+	var isWidget = __webpack_require__(28)
+	var isVHook = __webpack_require__(29)
 
 	module.exports = VirtualNode
 
@@ -2267,10 +2550,10 @@
 
 
 /***/ },
-/* 23 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(45)
+	var version = __webpack_require__(47)
 
 	module.exports = VirtualText
 
@@ -2283,10 +2566,10 @@
 
 
 /***/ },
-/* 24 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(45)
+	var version = __webpack_require__(47)
 
 	module.exports = isVirtualNode
 
@@ -2296,10 +2579,10 @@
 
 
 /***/ },
-/* 25 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(45)
+	var version = __webpack_require__(47)
 
 	module.exports = isVirtualText
 
@@ -2309,7 +2592,7 @@
 
 
 /***/ },
-/* 26 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isWidget
@@ -2320,7 +2603,7 @@
 
 
 /***/ },
-/* 27 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isHook
@@ -2332,7 +2615,7 @@
 
 
 /***/ },
-/* 28 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isThunk
@@ -2343,12 +2626,12 @@
 
 
 /***/ },
-/* 29 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var camelize = __webpack_require__(58)
-	var template = __webpack_require__(59)
-	var extend = __webpack_require__(46)
+	var camelize = __webpack_require__(60)
+	var template = __webpack_require__(61)
+	var extend = __webpack_require__(48)
 
 	module.exports = TypedError
 
@@ -2397,7 +2680,7 @@
 
 
 /***/ },
-/* 30 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -2513,13 +2796,13 @@
 
 
 /***/ },
-/* 31 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(33)
-	var Individual = __webpack_require__(12)
+	var createStore = __webpack_require__(35)
+	var Individual = __webpack_require__(14)
 
-	var createHash = __webpack_require__(47)
+	var createHash = __webpack_require__(49)
 
 	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
 
@@ -2537,16 +2820,16 @@
 
 
 /***/ },
-/* 32 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* (ignored) */
 
 /***/ },
-/* 33 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(48);
+	var hiddenStore = __webpack_require__(50);
 
 	module.exports = createStore;
 
@@ -2566,13 +2849,13 @@
 
 
 /***/ },
-/* 34 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var createStore = __webpack_require__(66)
-	var Individual = __webpack_require__(64)
+	var createStore = __webpack_require__(68)
+	var Individual = __webpack_require__(66)
 
-	var createHash = __webpack_require__(50)
+	var createHash = __webpack_require__(52)
 
 	var hashStore = Individual("__DATA_SET_WEAKMAP@3", createStore())
 
@@ -2590,10 +2873,10 @@
 
 
 /***/ },
-/* 35 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(53)
+	var version = __webpack_require__(55)
 
 	VirtualPatch.NONE = 0
 	VirtualPatch.VTEXT = 1
@@ -2618,10 +2901,10 @@
 
 
 /***/ },
-/* 36 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(53)
+	var version = __webpack_require__(55)
 
 	module.exports = isVirtualNode
 
@@ -2631,10 +2914,10 @@
 
 
 /***/ },
-/* 37 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var version = __webpack_require__(53)
+	var version = __webpack_require__(55)
 
 	module.exports = isVirtualText
 
@@ -2644,7 +2927,7 @@
 
 
 /***/ },
-/* 38 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isWidget
@@ -2655,7 +2938,7 @@
 
 
 /***/ },
-/* 39 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isThunk
@@ -2666,7 +2949,7 @@
 
 
 /***/ },
-/* 40 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isHook
@@ -2678,13 +2961,13 @@
 
 
 /***/ },
-/* 41 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isVNode = __webpack_require__(36)
-	var isVText = __webpack_require__(37)
-	var isWidget = __webpack_require__(38)
-	var isThunk = __webpack_require__(39)
+	var isVNode = __webpack_require__(38)
+	var isVText = __webpack_require__(39)
+	var isWidget = __webpack_require__(40)
+	var isThunk = __webpack_require__(41)
 
 	module.exports = handleThunk
 
@@ -2724,11 +3007,11 @@
 
 
 /***/ },
-/* 42 */
+/* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isObject = __webpack_require__(63)
-	var isHook = __webpack_require__(40)
+	var isObject = __webpack_require__(65)
+	var isHook = __webpack_require__(42)
 
 	module.exports = applyProperties
 
@@ -2826,7 +3109,7 @@
 
 
 /***/ },
-/* 43 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// Maps a virtual DOM tree onto a real DOM tree in an efficient manner.
@@ -2917,16 +3200,16 @@
 
 
 /***/ },
-/* 44 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var applyProperties = __webpack_require__(42)
+	var applyProperties = __webpack_require__(44)
 
-	var isWidget = __webpack_require__(38)
-	var VPatch = __webpack_require__(35)
+	var isWidget = __webpack_require__(40)
+	var VPatch = __webpack_require__(37)
 
-	var render = __webpack_require__(19)
-	var updateWidget = __webpack_require__(55)
+	var render = __webpack_require__(21)
+	var updateWidget = __webpack_require__(57)
 
 	module.exports = applyPatch
 
@@ -3091,14 +3374,14 @@
 
 
 /***/ },
-/* 45 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = "1"
 
 
 /***/ },
-/* 46 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3119,7 +3402,7 @@
 
 
 /***/ },
-/* 47 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3147,7 +3430,7 @@
 
 
 /***/ },
-/* 48 */
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = hiddenStore;
@@ -3169,7 +3452,7 @@
 
 
 /***/ },
-/* 49 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	if (typeof Object.create === 'function') {
@@ -3198,7 +3481,7 @@
 
 
 /***/ },
-/* 50 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = createHash
@@ -3226,7 +3509,7 @@
 
 
 /***/ },
-/* 51 */
+/* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var nativeIsArray = Array.isArray
@@ -3240,7 +3523,7 @@
 
 
 /***/ },
-/* 52 */
+/* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isObject
@@ -3251,14 +3534,14 @@
 
 
 /***/ },
-/* 53 */
+/* 55 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = "1"
 
 
 /***/ },
-/* 54 */
+/* 56 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var nativeIsArray = Array.isArray
@@ -3272,10 +3555,10 @@
 
 
 /***/ },
-/* 55 */
+/* 57 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isWidget = __webpack_require__(38)
+	var isWidget = __webpack_require__(40)
 
 	module.exports = updateWidget
 
@@ -3289,111 +3572,6 @@
 	    }
 
 	    return false
-	}
-
-
-/***/ },
-/* 56 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = function(obj) {
-	    if (typeof obj === 'string') return camelCase(obj);
-	    return walk(obj);
-	};
-
-	function walk (obj) {
-	    if (!obj || typeof obj !== 'object') return obj;
-	    if (isDate(obj) || isRegex(obj)) return obj;
-	    if (isArray(obj)) return map(obj, walk);
-	    return reduce(objectKeys(obj), function (acc, key) {
-	        var camel = camelCase(key);
-	        acc[camel] = walk(obj[key]);
-	        return acc;
-	    }, {});
-	}
-
-	function camelCase(str) {
-	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
-	        return x.toUpperCase();
-	    });
-	}
-
-	var isArray = Array.isArray || function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Array]';
-	};
-
-	var isDate = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object Date]';
-	};
-
-	var isRegex = function (obj) {
-	    return Object.prototype.toString.call(obj) === '[object RegExp]';
-	};
-
-	var has = Object.prototype.hasOwnProperty;
-	var objectKeys = Object.keys || function (obj) {
-	    var keys = [];
-	    for (var key in obj) {
-	        if (has.call(obj, key)) keys.push(key);
-	    }
-	    return keys;
-	};
-
-	function map (xs, f) {
-	    if (xs.map) return xs.map(f);
-	    var res = [];
-	    for (var i = 0; i < xs.length; i++) {
-	        res.push(f(xs[i], i));
-	    }
-	    return res;
-	}
-
-	function reduce (xs, f, acc) {
-	    if (xs.reduce) return xs.reduce(f, acc);
-	    for (var i = 0; i < xs.length; i++) {
-	        acc = f(acc, xs[i], i);
-	    }
-	    return acc;
-	}
-
-
-/***/ },
-/* 57 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var nargs = /\{([0-9a-zA-Z]+)\}/g
-	var slice = Array.prototype.slice
-
-	module.exports = template
-
-	function template(string) {
-	    var args
-
-	    if (arguments.length === 2 && typeof arguments[1] === "object") {
-	        args = arguments[1]
-	    } else {
-	        args = slice.call(arguments, 1)
-	    }
-
-	    if (!args || !args.hasOwnProperty) {
-	        args = {}
-	    }
-
-	    return string.replace(nargs, function replaceArg(match, i, index) {
-	        var result
-
-	        if (string[index - 1] === "{" &&
-	            string[index + match.length] === "}") {
-	            return i
-	        } else {
-	            result = args.hasOwnProperty(i) ? args[i] : null
-	            if (result === null || result === undefined) {
-	                return ""
-	            }
-
-	            return result
-	        }
-	    })
 	}
 
 
@@ -3506,6 +3684,111 @@
 /* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
+	module.exports = function(obj) {
+	    if (typeof obj === 'string') return camelCase(obj);
+	    return walk(obj);
+	};
+
+	function walk (obj) {
+	    if (!obj || typeof obj !== 'object') return obj;
+	    if (isDate(obj) || isRegex(obj)) return obj;
+	    if (isArray(obj)) return map(obj, walk);
+	    return reduce(objectKeys(obj), function (acc, key) {
+	        var camel = camelCase(key);
+	        acc[camel] = walk(obj[key]);
+	        return acc;
+	    }, {});
+	}
+
+	function camelCase(str) {
+	    return str.replace(/[_.-](\w|$)/g, function (_,x) {
+	        return x.toUpperCase();
+	    });
+	}
+
+	var isArray = Array.isArray || function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Array]';
+	};
+
+	var isDate = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object Date]';
+	};
+
+	var isRegex = function (obj) {
+	    return Object.prototype.toString.call(obj) === '[object RegExp]';
+	};
+
+	var has = Object.prototype.hasOwnProperty;
+	var objectKeys = Object.keys || function (obj) {
+	    var keys = [];
+	    for (var key in obj) {
+	        if (has.call(obj, key)) keys.push(key);
+	    }
+	    return keys;
+	};
+
+	function map (xs, f) {
+	    if (xs.map) return xs.map(f);
+	    var res = [];
+	    for (var i = 0; i < xs.length; i++) {
+	        res.push(f(xs[i], i));
+	    }
+	    return res;
+	}
+
+	function reduce (xs, f, acc) {
+	    if (xs.reduce) return xs.reduce(f, acc);
+	    for (var i = 0; i < xs.length; i++) {
+	        acc = f(acc, xs[i], i);
+	    }
+	    return acc;
+	}
+
+
+/***/ },
+/* 61 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var nargs = /\{([0-9a-zA-Z]+)\}/g
+	var slice = Array.prototype.slice
+
+	module.exports = template
+
+	function template(string) {
+	    var args
+
+	    if (arguments.length === 2 && typeof arguments[1] === "object") {
+	        args = arguments[1]
+	    } else {
+	        args = slice.call(arguments, 1)
+	    }
+
+	    if (!args || !args.hasOwnProperty) {
+	        args = {}
+	    }
+
+	    return string.replace(nargs, function replaceArg(match, i, index) {
+	        var result
+
+	        if (string[index - 1] === "{" &&
+	            string[index + match.length] === "}") {
+	            return i
+	        } else {
+	            result = args.hasOwnProperty(i) ? args[i] : null
+	            if (result === null || result === undefined) {
+	                return ""
+	            }
+
+	            return result
+	        }
+	    })
+	}
+
+
+/***/ },
+/* 62 */
+/***/ function(module, exports, __webpack_require__) {
+
 	/* WEBPACK VAR INJECTION */(function(process) {// Generated by CoffeeScript 1.6.3
 	(function() {
 	  var getNanoSeconds, hrtime, loadTime;
@@ -3543,15 +3826,15 @@
 	//@ sourceMappingURL=performance-now.map
 	*/
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(67)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(13)))
 
 /***/ },
-/* 61 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var topLevel = typeof global !== 'undefined' ? global :
 	    typeof window !== 'undefined' ? window : {}
-	var minDoc = __webpack_require__(65);
+	var minDoc = __webpack_require__(67);
 
 	if (typeof document !== 'undefined') {
 	    module.exports = document;
@@ -3568,7 +3851,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 62 */
+/* 64 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = extend
@@ -3589,7 +3872,7 @@
 
 
 /***/ },
-/* 63 */
+/* 65 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = isObject
@@ -3600,7 +3883,7 @@
 
 
 /***/ },
-/* 64 */
+/* 66 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var root = typeof window !== 'undefined' ?
@@ -3625,16 +3908,16 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 65 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* (ignored) */
 
 /***/ },
-/* 66 */
+/* 68 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hiddenStore = __webpack_require__(68);
+	var hiddenStore = __webpack_require__(69);
 
 	module.exports = createStore;
 
@@ -3654,76 +3937,7 @@
 
 
 /***/ },
-/* 67 */
-/***/ function(module, exports, __webpack_require__) {
-
-	// shim for using process in browser
-
-	var process = module.exports = {};
-
-	process.nextTick = (function () {
-	    var canSetImmediate = typeof window !== 'undefined'
-	    && window.setImmediate;
-	    var canPost = typeof window !== 'undefined'
-	    && window.postMessage && window.addEventListener
-	    ;
-
-	    if (canSetImmediate) {
-	        return function (f) { return window.setImmediate(f) };
-	    }
-
-	    if (canPost) {
-	        var queue = [];
-	        window.addEventListener('message', function (ev) {
-	            var source = ev.source;
-	            if ((source === window || source === null) && ev.data === 'process-tick') {
-	                ev.stopPropagation();
-	                if (queue.length > 0) {
-	                    var fn = queue.shift();
-	                    fn();
-	                }
-	            }
-	        }, true);
-
-	        return function nextTick(fn) {
-	            queue.push(fn);
-	            window.postMessage('process-tick', '*');
-	        };
-	    }
-
-	    return function nextTick(fn) {
-	        setTimeout(fn, 0);
-	    };
-	})();
-
-	process.title = 'browser';
-	process.browser = true;
-	process.env = {};
-	process.argv = [];
-
-	function noop() {}
-
-	process.on = noop;
-	process.addListener = noop;
-	process.once = noop;
-	process.off = noop;
-	process.removeListener = noop;
-	process.removeAllListeners = noop;
-	process.emit = noop;
-
-	process.binding = function (name) {
-	    throw new Error('process.binding is not supported');
-	}
-
-	// TODO(shtylman)
-	process.cwd = function () { return '/' };
-	process.chdir = function (dir) {
-	    throw new Error('process.chdir is not supported');
-	};
-
-
-/***/ },
-/* 68 */
+/* 69 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = hiddenStore;
