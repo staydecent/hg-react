@@ -1,10 +1,8 @@
-var struct = require('observ-struct');
-var Delegator = require('dom-delegator');
-var Loop = require('main-loop');
-var h = require('virtual-hyperscript');
-
+var hg = require('mercury');
 var Stapes = require('stapes');
 var xtend = require('xtend');
+
+var h = hg.h;
 
 
 module.exports = {
@@ -32,19 +30,16 @@ var Component = Stapes.subclass({
     this.refs = this._refs.getAll();
 
     this.state = this.getInitialState();
-    this._observ = new (Stapes.subclass())();
-    this._observ.set('state', this.state);
-    this._struct = struct({state: struct(this.state)});
+    this._state = hg.struct(this.state);
   },
   getInitialState: function() {
     return {};
   },
   setState: function(desc) {
-    var prevState = this._observ.get('state');
+    var prevState = this.state;
     var newState = xtend(prevState, desc);
     this.state = newState;
-    this._observ.set('state', newState);
-    this._struct.state.set(newState);
+    this._state.set(newState);
   },
   getDOMNode: function() {
     return this._elem || null;
@@ -52,10 +47,7 @@ var Component = Stapes.subclass({
   componentWillMount: function() {},
   componentDidMount: function() {},
   componentWillUpdate: function() {},
-  componentDidUpdate: function() {},
-  addEventListener: function(cb) {
-    this._struct(cb);
-  }
+  componentDidUpdate: function() {}
 }, true);
 
 function createClass(desc) {
@@ -83,7 +75,7 @@ function createFactory(Component) {
     if (vnode.children.length) {
       for (var x = 0; x < vnode.children.length; x++) {
         var child = vnode.children[x];
-        if (child.properties.ref) {
+        if (child.properties && child.properties.ref) {
           instance._refs.set(child.properties.ref, child);
         }
       }
@@ -109,6 +101,7 @@ function isValidComponent(component) {
 
 function LifecycleHook(component) {
   this.component = component;
+  console.debug('hooked', component);
 }
 
 LifecycleHook.prototype.hook = function (elem, propName) {
@@ -158,18 +151,7 @@ LifecycleHook.prototype.hook = function (elem, propName) {
 // Main entry func
 
 function renderComponent(component, elem) {
-  if (!isValidComponent(component)) {
-    throw "Invalid Component.";
-  }
-
-  Delegator(); // Setup proxied dom events
-
-  var render = createFactory(component);
-  var loop = Loop(component.state, render);
-
-  if (elem) { elem.appendChild(loop.target); }
-
-  component.addEventListener(loop.update); // call loop.update on state change
+  hg.app(elem, component._state, createFactory(component));
 }
 
 

@@ -47,12 +47,22 @@
 	/** @jsx React.DOM */
 
 	var Hello = React.createClass({displayName: 'Hello',
+	  getInitialState: function() {
+	    return {title: this.props.initialName};
+	  },
+
+	  componentDidMount: function() {
+	    setTimeout(function() {
+	      this.setState({title: 'FUJI!'});
+	    }.bind(this), 2000);
+	  },
+
 	  render: function() {
-	    return React.DOM("div", ["Hello ", this.props.name]);
+	    return React.DOM("div", ["Hello ", this.state.title]);
 	  }
 	});
 	 
-	React.render(Hello({name: 'World'}), document.body);
+	React.render(Hello({initialName: 'World'}), document.body);
 
 /***/ }
 /******/ ])

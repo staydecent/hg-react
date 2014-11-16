@@ -1,7 +1,7 @@
 {
   "name": "hg-react",
   "version": "0.1.7",
-  "description": "Mimic the React component API via Mercury modules.",
+  "description": "Mimic the React component API via Mercury.",
   "main": "index.js",
   "scripts": {
     "test": "jest"
@@ -25,13 +25,8 @@
   },
   "homepage": "https://github.com/staydecent/hg-react",
   "dependencies": {
-    "dom-delegator": "^11.0.0",
-    "main-loop": "^2.3.0",
-    "observ-struct": "^6.0.0",
+    "mercury": "^8.0.0",
     "stapes": "^0.8.1",
-    "vdom": "0.0.22",
-    "virtual-hyperscript": "^4.5.0",
-    "vtree": "0.0.22",
     "xtend": "^4.0.0"
   },
   "devDependencies": {
