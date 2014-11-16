@@ -24,6 +24,7 @@ var Component = Stapes.subclass({
       }
     }
 
+    this.refs = {};
     this.state = this.getInitialState();
     this._observ = new (Stapes.subclass())();
     this._observ.set('state', this.state);
