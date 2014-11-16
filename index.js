@@ -24,7 +24,12 @@ var Component = Stapes.subclass({
       }
     }
 
-    this.refs = {};
+    this._refs = new (Stapes.subclass())();
+    this._refs.on('change', function() {
+      this.refs = this._refs.getAll();
+    }.bind(this));
+    this.refs = this._refs.getAll();
+
     this.state = this.getInitialState();
     this._observ = new (Stapes.subclass())();
     this._observ.set('state', this.state);
@@ -43,6 +48,8 @@ var Component = Stapes.subclass({
   },
   componentWillMount: function() {},
   componentDidMount: function() {},
+  componentWillUpdate: function() {},
+  componentDidUpdate: function() {},
   addEventListener: function(cb) {
     this._observ.on('change:state', cb);
   }
@@ -62,12 +69,27 @@ function createClass(desc) {
 
 function createFactory(Component) {
   return function(props) {
-    var component = new Component(props);
+    var instance;
+    if (Component.render) {
+      instance = Component;
+    } else {
+      instance = new Component(props);   
+    }
+
+    var vnode = instance.render();
+    if (vnode.children.length) {
+      for (var x = 0; x < vnode.children.length; x++) {
+        var child = vnode.children[x];
+        if (child.properties.ref) {
+          instance._refs.set(child.properties.ref, child);
+        }
+      }
+    }
 
     return h('div', {
-      'key': component.displayName,
-      'ev-lifecycle': new LifecycleHook(component)
-    }, component.render());
+      'key': instance.displayName,
+      'ev-lifecycle': new LifecycleHook(instance)
+    }, vnode);
   };
 }
 
@@ -87,8 +109,6 @@ function LifecycleHook(component) {
 }
 
 LifecycleHook.prototype.hook = function (elem, propName) {
-  this.component._elem = elem;
-
   if (!this.component._mounted) {
     this.component.componentWillMount();
   } else {
@@ -96,8 +116,35 @@ LifecycleHook.prototype.hook = function (elem, propName) {
   }
 
   setTimeout(function() {
+    this.component._elem = elem.firstChild || elem;
+
+    // as well as hook up our lifecycle methods, we will
+    // also mimic the element.refs[name].getDOMNode() pattern
+    if (this.component._elem.childNodes.length) {
+      // iterate each ref
+      this.component._refs.getAllAsArray().forEach(function(ref) {
+        if (!ref.getDOMNode) {
+          var relevantNode;
+          var nodeList = this.component._elem.childNodes;
+          
+          // iterate each child node of component
+          for (var i = 0; i < nodeList.length; ++i) {
+            var item = nodeList[i];
+            if (item.ref === ref.id) {
+              relevantNode = item;
+            }
+          }
+
+          if (!relevantNode) return;
+          ref.getDOMNode = function() { return relevantNode; };
+          this.component._refs.set(ref.id, ref);
+        }
+      }.bind(this));
+    }
+
     if (!this.component._mounted) {
       this.component.componentDidMount();
+      this.component._mounted = true;
     } else {
       this.component.componentDidUpdate();
     }
@@ -114,7 +161,7 @@ function renderComponent(component, elem) {
 
   Delegator(); // Setup proxied dom events
 
-  var loop = Loop(component.getInitialState(), component.render);
+  var loop = Loop(component.getInitialState(), createFactory(component));
   if (elem) { elem.appendChild(loop.target); }
 
   component.addEventListener(loop.update); // call loop.update on state change
